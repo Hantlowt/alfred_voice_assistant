@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,8 @@ from .intent import IntentEngine
 _SPACE_OR_PUNCTUATION = re.compile(r"[^\wÀ-ÿ]+", re.UNICODE)
 _NEGATION = re.compile(
     r"\b(?:ne|n)\b(?:\s+\w+){0,8}\s+\b(?:pas|plus|jamais|rien)\b|"
-    r"\b(?:pas|jamais)\s+(?:de|d|la|le|les|du|des)?\s*(?:lumière|musique)\b",
+    r"\b(?:pas|jamais)\s+(?:de|d|la|le|les|du|des)?\s*"
+    r"(?:lumières?|halogène|salon|salle|leds?|clim(?:atisation)?)\b",
     re.IGNORECASE,
 )
 _REPORTED_SPEECH = re.compile(
@@ -25,34 +27,28 @@ _REPORTED_SPEECH = re.compile(
     re.IGNORECASE,
 )
 _POLITE_REQUEST = re.compile(
-    r"^(?:s il te plaît\s+)?(?:peux tu|pourrais tu|est ce que tu peux|merci de|veuillez|"
-    r"je veux que tu|je voudrais que tu)\b",
+    r"^(?:s il (?:te|vous) plaît\s+)?(?:peux tu|pouvez vous|pourrais tu|pourriez vous|"
+    r"est ce que tu peux|est ce que vous pouvez|merci de|veuillez|je veux que tu|"
+    r"je voudrais que tu)\b",
     re.IGNORECASE,
 )
-_DIRECT_REQUESTS = {
-    "turn_on_light": re.compile(r"^(?:s il te plaît\s+)?(?:allume|active|mets)\b", re.IGNORECASE),
-    "turn_off_light": re.compile(r"^(?:s il te plaît\s+)?(?:éteins|coupe|désactive)\b", re.IGNORECASE),
-    "get_weather": re.compile(
-        r"^(?:s il te plaît\s+)?(?:météo|la météo|quel temps|quelle météo|fait il|"
-        r"va t il (?:pleuvoir|neiger)|pleut il|donne moi (?:la )?météo|affiche (?:la )?météo)\b",
-        re.IGNORECASE,
-    ),
-    "play_music": re.compile(
-        r"^(?:s il te plaît\s+)?(?:joue|lance|mets|démarre|reprends|fais jouer)\b",
-        re.IGNORECASE,
-    ),
-    "stop_music": re.compile(
-        r"^(?:s il te plaît\s+)?(?:arrête|stoppe|coupe|pause|mets en pause)\b",
-        re.IGNORECASE,
-    ),
-}
-_ACTION_TERMS = {
-    "turn_on_light": re.compile(r"\b(?:allum\w*|activ\w*)\b", re.IGNORECASE),
-    "turn_off_light": re.compile(r"\b(?:étein\w*|coup\w*|désactiv\w*)\b", re.IGNORECASE),
-    "get_weather": re.compile(r"\b(?:météo|temps|pleuv\w*|neig\w*)\b", re.IGNORECASE),
-    "play_music": re.compile(r"\b(?:jou\w*|lanc\w*|musique|repren\w*)\b", re.IGNORECASE),
-    "stop_music": re.compile(r"\b(?:arr[eê]t\w*|stopp\w*|pause|coup\w*)\b", re.IGNORECASE),
-}
+_DIRECT_REQUEST = re.compile(
+    r"^(?:s il (?:te|vous) plaît\s+)?(?:allum\w*|étein\w*|etein\w*|activ\w*|"
+    r"désactiv\w*|desactiv\w*|coup\w*)\b",
+    re.IGNORECASE,
+)
+_ACTION_TERM = re.compile(
+    r"\b(?:allum\w*|étein\w*|etein\w*|activ\w*|désactiv\w*|desactiv\w*|coup\w*)\b",
+    re.IGNORECASE,
+)
+_ALFRED = re.compile(r"\balfred\b", re.IGNORECASE)
+_HALOGENE_ASR_ALIASES = (
+    re.compile(r"\bla\s+le\s+jeune\b", re.IGNORECASE),
+    re.compile(r"\beug[eèé]ne\b", re.IGNORECASE),
+)
+_CLIM_ASR_ALIAS_WITH_ARTICLE = re.compile(r"\ble\s+climat\b", re.IGNORECASE)
+_CLIM_ASR_ALIAS = re.compile(r"\bclimat\b", re.IGNORECASE)
+_ETEINS_ASR_ALIAS = re.compile(r"\best\s+un\b", re.IGNORECASE)
 
 
 class Terminal:
@@ -103,6 +99,46 @@ class RecentTranscripts:
         return True
 
 
+def normalize_asr_transcript(transcript: str) -> str:
+    """Corrige quelques confusions Vosk connues avant la classification d'intention."""
+    normalized = transcript
+    for alias in _HALOGENE_ASR_ALIASES:
+        normalized = alias.sub("halogène", normalized)
+    normalized = _CLIM_ASR_ALIAS_WITH_ARTICLE.sub("la clim", normalized)
+    normalized = _CLIM_ASR_ALIAS.sub("clim", normalized)
+    normalized = _ETEINS_ASR_ALIAS.sub("éteins", normalized)
+    return " ".join(normalized.split())
+
+
+@dataclass(frozen=True, slots=True)
+class AlfredAuthorization:
+    allowed: bool
+    status: str
+
+
+class AlfredGate:
+    """Autorise la phrase courante si « alfred » est présent ici ou juste avant."""
+
+    def __init__(self, required: bool) -> None:
+        self.required = required
+        self._previous_had_keyword = False
+
+    def evaluate(self, transcript: str) -> AlfredAuthorization:
+        current_had_keyword = bool(_ALFRED.search(transcript))
+        if not self.required:
+            authorization = AlfredAuthorization(True, "mode désactivé — mot-clé non requis")
+        elif current_had_keyword:
+            authorization = AlfredAuthorization(True, "« alfred » détecté dans cette phrase")
+        elif self._previous_had_keyword:
+            authorization = AlfredAuthorization(
+                True, "« alfred » détecté dans la phrase précédente"
+            )
+        else:
+            authorization = AlfredAuthorization(False, "« alfred » absent")
+        self._previous_had_keyword = current_had_keyword
+        return authorization
+
+
 def safety_override_reason(transcript: str, intent: str = "do_nothing") -> str | None:
     """Bloque les formes françaises dangereuses que le modèle générique confond parfois."""
     normalized = _SPACE_OR_PUNCTUATION.sub(" ", transcript.casefold()).strip()
@@ -110,14 +146,19 @@ def safety_override_reason(transcript: str, intent: str = "do_nothing") -> str |
         return "négation détectée"
     if _REPORTED_SPEECH.search(normalized):
         return "propos rapporté détecté"
-    direct_pattern = _DIRECT_REQUESTS.get(intent)
-    action_terms = _ACTION_TERMS.get(intent)
-    if direct_pattern and not (
-        direct_pattern.search(normalized)
-        or (_POLITE_REQUEST.search(normalized) and action_terms and action_terms.search(normalized))
+    without_keyword = _ALFRED.sub(" ", normalized).strip()
+    if intent != "do_nothing" and not (
+        _DIRECT_REQUEST.search(without_keyword)
+        or (_POLITE_REQUEST.search(without_keyword) and _ACTION_TERM.search(without_keyword))
     ):
         return "commande directe non détectée"
     return None
+
+
+@dataclass(frozen=True, slots=True)
+class PendingUtterance:
+    transcript: str
+    alfred: AlfredAuthorization
 
 
 class IntentWorker:
@@ -129,31 +170,38 @@ class IntentWorker:
         terminal: Terminal,
         confidence_threshold: float,
         duplicate_window: float,
+        require_alfred: bool = False,
         queue_size: int = 16,
     ) -> None:
         self._engine = engine
         self._terminal = terminal
         self._threshold = confidence_threshold
         self._recent = RecentTranscripts(duplicate_window)
-        self._queue: queue.Queue[str | None] = queue.Queue(maxsize=queue_size)
+        self._alfred_gate = AlfredGate(require_alfred)
+        self._queue: queue.Queue[PendingUtterance | None] = queue.Queue(maxsize=queue_size)
         self._thread = threading.Thread(target=self._run, name="laya-intents", daemon=True)
 
     def start(self) -> None:
         self._thread.start()
 
     def submit(self, transcript: str) -> None:
-        if not self._recent.add_if_new(transcript):
+        normalized = normalize_asr_transcript(transcript)
+        if normalized != transcript:
+            self._terminal.line(f"🔧 Normalisation ASR         : {transcript!r} → {normalized!r}")
+        alfred = self._alfred_gate.evaluate(normalized)
+        if not self._recent.add_if_new(normalized):
             self._terminal.line("↪ Phrase dupliquée ignorée.")
             return
+        item = PendingUtterance(normalized, alfred)
         try:
-            self._queue.put_nowait(transcript)
+            self._queue.put_nowait(item)
         except queue.Full:
             try:
                 self._queue.get_nowait()
                 self._queue.task_done()
             except queue.Empty:
                 pass
-            self._queue.put_nowait(transcript)
+            self._queue.put_nowait(item)
             self._terminal.line("⚠ File Laya saturée : la phrase la plus ancienne a été abandonnée.")
 
     def close(self) -> None:
@@ -165,53 +213,72 @@ class IntentWorker:
 
     def _run(self) -> None:
         while True:
-            transcript = self._queue.get()
+            item = self._queue.get()
             try:
-                if transcript is None:
+                if item is None:
                     return
-                self._handle(transcript)
+                self._handle(item.transcript, item.alfred)
             except Exception as error:  # une erreur d'inférence ne doit pas arrêter l'écoute
                 self._terminal.line(f"Erreur Laya : {type(error).__name__}: {error}")
             finally:
                 self._queue.task_done()
 
-    def _handle(self, transcript: str) -> None:
+    def _handle(
+        self,
+        transcript: str,
+        alfred: AlfredAuthorization | None = None,
+    ) -> None:
+        alfred = alfred or AlfredAuthorization(True, "mode désactivé — mot-clé non requis")
         result = self._engine.predict(transcript)
-        raw_confidence = result.probabilities[result.intent]
+        raw_confidence = result.confidence
         safety_reason = safety_override_reason(transcript, result.intent)
-        accepted = (
+        model_accepted = (
             safety_reason is None
             and (result.intent == "do_nothing" or raw_confidence >= self._threshold)
         )
-        intent = result.intent if accepted else "do_nothing"
+        candidate = result.intent if model_accepted else "do_nothing"
+        blocked_by_alfred = candidate != "do_nothing" and not alfred.allowed
+        final_action = "do_nothing" if blocked_by_alfred else candidate
 
-        probabilities = " · ".join(
-            f"{name}={probability:.1%}"
-            for name, probability in sorted(
-                result.probabilities.items(), key=lambda item: item[1], reverse=True
+        self._terminal.line(f"🧠 Action proposée par Laya : {result.intent}")
+        self._terminal.line(f"🔑 Contrôle Alfred           : {alfred.status}")
+        for report in result.reports:
+            probabilities = " · ".join(
+                f"{name}={probability:.1%}"
+                for name, probability in sorted(
+                    report.probabilities.items(), key=lambda item: item[1], reverse=True
+                )
             )
-        )
-        suffix = ""
+            self._terminal.line(
+                f"📊 Probabilités {report.label:<10} : {probabilities}"
+            )
+            if len(result.reports) > 1:
+                self._terminal.line(
+                    f"⏱  Latence {report.label:<15} : {report.latency_ms:.1f} ms"
+                )
+        self._terminal.line(f"⏱  Latence Laya totale       : {result.latency_ms:.1f} ms")
+
+        reason = ""
         if safety_reason:
-            suffix = f" (Laya: {result.intent}, garde-fou: {safety_reason})"
-        elif not accepted:
-            suffix = f" (Laya: {result.intent}, sous le seuil {self._threshold:.0%})"
-        self._terminal.line(f"🎯 Intention     : {intent}{suffix}")
-        self._terminal.line(f"📊 Probabilités : {probabilities}")
-        self._terminal.line(f"⏱  Latence Laya : {result.latency_ms:.1f} ms")
-        simulate_action(intent, self._terminal.line)
+            reason = f"garde-fou : {safety_reason}"
+        elif not model_accepted:
+            reason = f"confiance sous le seuil de {self._threshold:.0%}"
+        elif blocked_by_alfred:
+            reason = "mot-clé « alfred » absent de cette phrase et de la précédente"
+        elif final_action == "do_nothing":
+            reason = "aucune action à exécuter"
+
+        self._terminal.line(f"⚡ ACTION FINALE              : {final_action}")
+        if final_action == "do_nothing":
+            self._terminal.line(f"🚫 EXÉCUTION SIMULÉE          : NON — {reason}")
+        else:
+            self._terminal.line("✅ EXÉCUTION SIMULÉE          : OUI")
+            simulate_action(final_action, self._terminal.line)
 
 
 def simulate_action(intent: str, output: Callable[[str], None] = print) -> None:
-    messages = {
-        "turn_on_light": "💡 [simulation] Lumière allumée.",
-        "turn_off_light": "🌑 [simulation] Lumière éteinte.",
-        "get_weather": "🌦  [simulation] Consultation de la météo.",
-        "play_music": "▶️  [simulation] Lecture de la musique.",
-        "stop_music": "⏹  [simulation] Arrêt de la musique.",
-    }
-    if intent in messages:
-        output(messages[intent])
+    if intent != "do_nothing":
+        output(f"🏠 [simulation uniquement] {intent}")
 
 
 def run_microphone(

@@ -37,6 +37,18 @@ Pour quitter : `Ctrl+C`.
 # Seuil à 80 %, anti-doublon de 5 secondes
 uv run alfred-local --threshold 0.80 --duplicate-window 5
 
+# Exiger « alfred » dans la phrase courante ou dans celle juste avant
+uv run alfred-local --require-alfred
+
+# Désactiver explicitement cette exigence (c'est aussi la valeur par défaut)
+uv run alfred-local --no-require-alfred
+
+# Un seul appel : choix direct parmi les 14 actions (mode par défaut)
+uv run alfred-local --intent-mode flat
+
+# Deux appels : opération, puis objet
+uv run alfred-local --intent-mode factorized
+
 # Voir les microphones, puis en sélectionner un
 uv run alfred-local --list-devices
 uv run alfred-local --device 2
@@ -59,9 +71,46 @@ bloque jamais le callback audio. Le terminal affiche ensuite :
 - toutes les probabilités renvoyées par Laya ;
 - la latence de l'appel Laya (chargement du modèle exclu).
 
-Les actions possibles sont `turn_on_light`, `turn_off_light`, `get_weather`, `play_music`,
-`stop_music` et `do_nothing`. Une intention sous le seuil est remplacée par `do_nothing`. Les mêmes
-phrases répétées pendant la fenêtre anti-doublon sont ignorées.
+Avec `--require-alfred`, une action n'est retenue que si Vosk a transcrit le mot exact `alfred` dans
+la phrase courante ou dans la phrase finalisée immédiatement précédente. Cela permet aussi de dire
+« Alfred », puis la commande dans une seconde phrase. L'autorisation ne se propage pas à une
+troisième phrase. Chaque résultat indique clairement l'état de ce contrôle.
+
+Les seules actions proposées à Laya sont :
+
+- `do_nothing` ;
+- `éteins les lumières` ;
+- `allume les lumières` ;
+- `allume l'halogène` ;
+- `allume le salon` ;
+- `allume la salle à manger` ;
+- `éteins l'halogène` ;
+- `éteins le luminaire du salon` ;
+- `éteins le salon` ;
+- `éteins la salle à manger` ;
+- `allume les leds` ;
+- `éteins les leds` ;
+- `allume la clim` ;
+- `éteins la clim`.
+
+Le mode `flat` effectue un seul appel Laya avec cette liste complète. Le mode `factorized` effectue
+réellement deux appels successifs sur la même transcription : le premier choisit `allumer`,
+`éteindre` ou `do_nothing`, puis le second choisit l'objet (`les lumières`, `l'halogène`, `le salon`,
+`la salle à manger`, `le luminaire du salon`, `les leds`, `la clim` ou `do_nothing`). Les deux jeux
+de probabilités et leurs latences sont affichés séparément. La confiance utilisée par le seuil est
+la plus faible des deux réponses sélectionnées : les deux doivent donc être suffisamment sûres.
+Une combinaison absente de la liste d'actions, comme allumer le luminaire spécifique du salon, est
+ramenée à `do_nothing`.
+
+Avant l'anti-doublon et l'inférence Laya, une normalisation ciblée corrige les erreurs Vosk connues
+`la le jeune` et `eugène` en `halogène`, `climat` en `clim`, ainsi que `est un` en `éteins`. La
+transcription originale reste affichée, puis le terminal montre explicitement la transformation avec
+`Normalisation ASR`. Cette correction s'applique aux deux modes d'intention.
+
+Une intention sous le seuil est remplacée par `do_nothing`. Les mêmes phrases répétées pendant la
+fenêtre anti-doublon sont ignorées. Pour chaque phrase, le terminal distingue l'action proposée par
+Laya, les probabilités, l'état du contrôle Alfred, l'**ACTION FINALE** et si son exécution simulée
+aurait eu lieu.
 
 Les instructions données au modèle imposent `do_nothing` pour les conversations ordinaires, les
 propos rapportés, les négations, les phrases qui ne semblent pas adressées à l'assistant et tout cas

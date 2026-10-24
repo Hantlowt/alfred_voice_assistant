@@ -34,6 +34,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", type=_device, help="index ou fragment du nom du microphone")
     parser.add_argument("--models-dir", type=Path, default=default_models)
     parser.add_argument("--list-devices", action="store_true", help="liste les périphériques audio")
+    parser.add_argument(
+        "--require-alfred",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="exige « alfred » dans la phrase courante ou la précédente",
+    )
+    parser.add_argument(
+        "--intent-mode",
+        choices=("flat", "factorized"),
+        default="flat",
+        help="un choix parmi les actions, ou deux choix opération + objet",
+    )
     return parser
 
 
@@ -53,9 +65,19 @@ def main() -> None:
 
     terminal = Terminal()
     terminal.line(f"Modèles locaux : {args.models_dir.expanduser().resolve()}")
+    terminal.line(
+        "Mode Alfred obligatoire : " + ("ACTIVÉ" if args.require_alfred else "DÉSACTIVÉ")
+    )
+    terminal.line(f"Mode de décision Laya : {args.intent_mode}")
     vosk_path, laya_path = ensure_models(args.models_dir.expanduser().resolve())
-    engine = LayaMlxIntentEngine(laya_path)
-    worker = IntentWorker(engine, terminal, args.threshold, args.duplicate_window)
+    engine = LayaMlxIntentEngine(laya_path, mode=args.intent_mode)
+    worker = IntentWorker(
+        engine,
+        terminal,
+        args.threshold,
+        args.duplicate_window,
+        require_alfred=args.require_alfred,
+    )
     run_microphone(vosk_path, worker, terminal, args.device)
 
 
