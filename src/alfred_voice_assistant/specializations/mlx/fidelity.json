@@ -1,0 +1,208 @@
+{
+  "atol": 1e-06,
+  "expected": [
+    {
+      "label": "allume les lumières",
+      "probabilities": {
+        "allume l'halogène": 0.05280134826898575,
+        "allume la clim": 0.06482201814651489,
+        "allume la salle à manger": 0.0744481012225151,
+        "allume le salon": 0.07851884514093399,
+        "allume les leds": 0.07536303251981735,
+        "allume les lumières": 0.09210093319416046,
+        "do_nothing": 0.07188783586025238,
+        "éteins l'halogène": 0.05390554666519165,
+        "éteins la clim": 0.06319548189640045,
+        "éteins la salle à manger": 0.0712197795510292,
+        "éteins le luminaire du salon": 0.07213534414768219,
+        "éteins le salon": 0.07587961107492447,
+        "éteins les leds": 0.07094668596982956,
+        "éteins les lumières": 0.08277550339698792
+      }
+    },
+    {
+      "label": "éteins le luminaire du salon",
+      "probabilities": {
+        "allume l'halogène": 0.06086472421884537,
+        "allume la clim": 0.06430579721927643,
+        "allume la salle à manger": 0.0724467858672142,
+        "allume le salon": 0.07199222594499588,
+        "allume les leds": 0.06178966164588928,
+        "allume les lumières": 0.0767386257648468,
+        "do_nothing": 0.06317143887281418,
+        "éteins l'halogène": 0.06683209538459778,
+        "éteins la clim": 0.06956589967012405,
+        "éteins la salle à manger": 0.0778963640332222,
+        "éteins le luminaire du salon": 0.08423259854316711,
+        "éteins le salon": 0.08291266113519669,
+        "éteins les leds": 0.06975127756595612,
+        "éteins les lumières": 0.07749990373849869
+      }
+    },
+    {
+      "label": "éteins l'halogène",
+      "probabilities": {
+        "allume l'halogène": 0.08528375625610352,
+        "allume la clim": 0.06703389436006546,
+        "allume la salle à manger": 0.06887460500001907,
+        "allume le salon": 0.06843984127044678,
+        "allume les leds": 0.07213533669710159,
+        "allume les lumières": 0.06718292087316513,
+        "do_nothing": 0.07000607252120972,
+        "éteins l'halogène": 0.08582605421543121,
+        "éteins la clim": 0.0672498419880867,
+        "éteins la salle à manger": 0.06917823851108551,
+        "éteins le luminaire du salon": 0.06908988952636719,
+        "éteins le salon": 0.06959313154220581,
+        "éteins les leds": 0.07345668226480484,
+        "éteins les lumières": 0.06664970517158508
+      }
+    },
+    {
+      "label": "éteins l'halogène",
+      "probabilities": {
+        "allume l'halogène": 0.09311134368181229,
+        "allume la clim": 0.06344414502382278,
+        "allume la salle à manger": 0.06456003338098526,
+        "allume le salon": 0.0639648586511612,
+        "allume les leds": 0.06470324844121933,
+        "allume les lumières": 0.06253617256879807,
+        "do_nothing": 0.061976149678230286,
+        "éteins l'halogène": 0.10296715050935745,
+        "éteins la clim": 0.06861387938261032,
+        "éteins la salle à manger": 0.07038631290197372,
+        "éteins le luminaire du salon": 0.07443556189537048,
+        "éteins le salon": 0.0722697526216507,
+        "éteins les leds": 0.07161573320627213,
+        "éteins les lumières": 0.06541555374860764
+      }
+    },
+    {
+      "label": "allume le salon",
+      "probabilities": {
+        "allume l'halogène": 0.060663096606731415,
+        "allume la clim": 0.07555978745222092,
+        "allume la salle à manger": 0.07410087436437607,
+        "allume le salon": 0.08706135302782059,
+        "allume les leds": 0.07476208359003067,
+        "allume les lumières": 0.07316242903470993,
+        "do_nothing": 0.07114901393651962,
+        "éteins l'halogène": 0.06052688881754875,
+        "éteins la clim": 0.0699419230222702,
+        "éteins la salle à manger": 0.0698719248175621,
+        "éteins le luminaire du salon": 0.06877822428941727,
+        "éteins le salon": 0.07825175672769547,
+        "éteins les leds": 0.06946729123592377,
+        "éteins les lumières": 0.06670338660478592
+      }
+    },
+    {
+      "label": "éteins le salon",
+      "probabilities": {
+        "allume l'halogène": 0.057518765330314636,
+        "allume la clim": 0.07077473402023315,
+        "allume la salle à manger": 0.07134772092103958,
+        "allume le salon": 0.07736391574144363,
+        "allume les leds": 0.06728163361549377,
+        "allume les lumières": 0.07202796638011932,
+        "do_nothing": 0.06910139322280884,
+        "éteins l'halogène": 0.0630108192563057,
+        "éteins la clim": 0.07295019179582596,
+        "éteins la salle à manger": 0.07567065209150314,
+        "éteins le luminaire du salon": 0.07496766000986099,
+        "éteins le salon": 0.08575479686260223,
+        "éteins les leds": 0.07034584879875183,
+        "éteins les lumières": 0.07188396155834198
+      }
+    },
+    {
+      "label": "allume la salle à manger",
+      "probabilities": {
+        "allume l'halogène": 0.05681753531098366,
+        "allume la clim": 0.07561682909727097,
+        "allume la salle à manger": 0.08735828846693039,
+        "allume le salon": 0.08095146715641022,
+        "allume les leds": 0.07325804978609085,
+        "allume les lumières": 0.07018819451332092,
+        "do_nothing": 0.06595747172832489,
+        "éteins l'halogène": 0.05774751305580139,
+        "éteins la clim": 0.07258155941963196,
+        "éteins la salle à manger": 0.08349183946847916,
+        "éteins le luminaire du salon": 0.06929278373718262,
+        "éteins le salon": 0.07557166367769241,
+        "éteins les leds": 0.06935539096593857,
+        "éteins les lumières": 0.061811547726392746
+      }
+    },
+    {
+      "label": "éteins la salle à manger",
+      "probabilities": {
+        "allume l'halogène": 0.052586376667022705,
+        "allume la clim": 0.07482407242059708,
+        "allume la salle à manger": 0.08177870512008667,
+        "allume le salon": 0.07531921565532684,
+        "allume les leds": 0.0716436505317688,
+        "allume les lumières": 0.06767819076776505,
+        "do_nothing": 0.07026159018278122,
+        "éteins l'halogène": 0.059472210705280304,
+        "éteins la clim": 0.07620218396186829,
+        "éteins la salle à manger": 0.08698023855686188,
+        "éteins le luminaire du salon": 0.06842944771051407,
+        "éteins le salon": 0.07677710801362991,
+        "éteins les leds": 0.07334917038679123,
+        "éteins les lumières": 0.06469789147377014
+      }
+    },
+    {
+      "label": "allume les leds",
+      "probabilities": {
+        "allume l'halogène": 0.0625334084033966,
+        "allume la clim": 0.07239001989364624,
+        "allume la salle à manger": 0.07287245988845825,
+        "allume le salon": 0.07507584244012833,
+        "allume les leds": 0.08244972676038742,
+        "allume les lumières": 0.07416736334562302,
+        "do_nothing": 0.06675291806459427,
+        "éteins l'halogène": 0.06384715437889099,
+        "éteins la clim": 0.07064054906368256,
+        "éteins la salle à manger": 0.0705493912100792,
+        "éteins le luminaire du salon": 0.06980667263269424,
+        "éteins le salon": 0.07348320633172989,
+        "éteins les leds": 0.07816877216100693,
+        "éteins les lumières": 0.06726251542568207
+      }
+    },
+    {
+      "label": "éteins les leds",
+      "probabilities": {
+        "allume l'halogène": 0.062441300600767136,
+        "allume la clim": 0.0688072070479393,
+        "allume la salle à manger": 0.06826280057430267,
+        "allume le salon": 0.06836077570915222,
+        "allume les leds": 0.07296180725097656,
+        "allume les lumières": 0.070529505610466,
+        "do_nothing": 0.06168926879763603,
+        "éteins l'halogène": 0.07023929059505463,
+        "éteins la clim": 0.07504189759492874,
+        "éteins la salle à manger": 0.07396237552165985,
+        "éteins le luminaire du salon": 0.07299883663654327,
+        "éteins le salon": 0.07878012210130692,
+        "éteins les leds": 0.08282840251922607,
+        "éteins les lumières": 0.073096364736557
+      }
+    }
+  ],
+  "probes": [
+    "Allume les lumières.",
+    "Éteins les lumières du salon.",
+    "Allume le halogène, s'il te plaît.",
+    "Éteins le halogène.",
+    "Allume le salon maintenant.",
+    "Éteins le salon, merci.",
+    "Allume la salle à manger.",
+    "Éteins la salle à manger après le dîner.",
+    "Allume les LEDs.",
+    "Éteins les LED."
+  ],
+  "rtol": 1e-05
+}

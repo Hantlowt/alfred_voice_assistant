@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Protocol
 
+from .models import LAYA_REPO_ID, LAYA_TORCH_REPO_ID
+from .specialization import LatentSpecialization
+
 ACTIONS = (
     "do_nothing",
     "éteins les lumières",
@@ -135,28 +138,69 @@ class IntentEngine(Protocol):
 class LayaIntentEngine:
     """Adaptateur commun aux API publiques Laya MLX et Laya PyTorch."""
 
-    def __init__(self, model_path: Path, mode: str = "flat", backend: str = "mlx") -> None:
+    def __init__(
+        self,
+        model_path: Path,
+        mode: str = "flat",
+        backend: str = "mlx",
+        specialization_path: Path | None = None,
+    ) -> None:
         if mode not in {"flat", "factorized"}:
             raise ValueError(f"Mode d'intention inconnu : {mode}")
         if backend == "mlx":
             import laya_mlx as laya
 
             print("Chargement de Laya MLX en mémoire…")
-            self._agent = laya.load(str(model_path), dtype="float16")
+            self._agent = laya.load(str(model_path))
+            base_model = LAYA_REPO_ID
         elif backend == "torch":
             import laya
 
             print("Chargement de Laya PyTorch sur CPU en mémoire…")
-            self._agent = laya.load(str(model_path), subfolder="multilingual", device="cpu")
+            self._agent = laya.load(str(model_path), device="cpu")
+            base_model = LAYA_TORCH_REPO_ID
         else:
             raise ValueError(f"Backend Laya inconnu : {backend}")
         self._mode = mode
+        self._specialization = None
+        self._embed = None
+        if specialization_path is not None:
+            if mode != "flat":
+                raise ValueError("La spécialisation latente s'applique uniquement au mode flat.")
+            self._specialization = LatentSpecialization(
+                specialization_path,
+                backend=backend,
+                expected_labels=ACTIONS,
+                expected_base_model=base_model,
+            )
+            self._embed = laya.embed_fn_from_agent(self._agent)
+            print(
+                "Spécialisation Laya Studio chargée : "
+                f"{self._specialization.strategy} ({specialization_path})"
+            )
 
     def predict(self, transcript: str) -> IntentResult:
         from time import perf_counter
 
         if self._mode == "factorized":
             return self._predict_factorized(transcript)
+
+        if self._specialization is not None and self._embed is not None:
+            started = perf_counter()
+            prediction = self._specialization.predict(transcript, self._embed)
+            latency_ms = (perf_counter() - started) * 1000
+            return IntentResult(
+                intent=prediction.choice,
+                confidence=prediction.probabilities[prediction.choice],
+                reports=(
+                    ProbabilityReport(
+                        "spécialisé",
+                        prediction.probabilities,
+                        latency_ms,
+                    ),
+                ),
+                latency_ms=latency_ms,
+            )
 
         started = perf_counter()
         response = self._agent.predict(transcript, INTENT_QUESTION)

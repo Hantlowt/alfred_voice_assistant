@@ -1,9 +1,10 @@
 # Alfred Voice Assistant — prototype local
 
 Prototype local sans wake word et sans entraînement : Vosk transcrit le microphone en continu, puis
-Laya classe chaque phrase finalisée dans une liste fermée d'actions. Le backend est MLX sur Mac
-Apple Silicon et PyTorch CPU sur Linux x86-64. Les actions sont simulées par défaut ; leur exécution
-réelle via Home Assistant doit être activée explicitement.
+Laya classe chaque phrase finalisée dans une liste fermée d'actions. Une spécialisation légère créée
+avec Laya Studio est appliquée par défaut au mode `flat`, sans modifier ni recopier les poids du
+modèle. Le backend est MLX sur Mac Apple Silicon et PyTorch CPU sur Linux x86-64. Les actions sont
+simulées par défaut ; leur exécution réelle via Home Assistant doit être activée explicitement.
 
 ## Prérequis
 
@@ -26,6 +27,15 @@ Le script installe PortAudio/ALSA, Git, `uv`, clone le dépôt dans
 `~/.local/share/alfred_voice_assistant`, installe le backend Laya PyTorch CPU, demande le token Home
 Assistant sans l'afficher puis le sauvegarde avec les permissions `600` dans
 `~/.config/alfred_voice_assistant/home_assistant_token`.
+
+Une installation existante se met ensuite à jour avec :
+
+```bash
+alfred-update
+```
+
+Cette commande effectue un `git pull --ff-only`, resynchronise exactement `uv.lock`, conserve le
+token et recrée les lanceurs. Relancer la commande `curl` initiale produit le même résultat.
 
 Ensuite :
 
@@ -55,7 +65,7 @@ démarrage, l'application télécharge automatiquement :
 - `aac6fef/laya-multilingual-mlx` depuis Hugging Face.
 
 Sous Linux, le second modèle est remplacé automatiquement par le checkpoint multilingue PyTorch
-`convaiinnovations/laya`.
+`convaiinnovations/laya-multilingual`.
 
 Les modèles sont stockés par défaut dans `~/.cache/alfred-voice-assistant`. Tous les lancements
 suivants chargent exclusivement ces chemins locaux et peuvent donc fonctionner sans réseau.
@@ -65,8 +75,8 @@ Pour quitter : `Ctrl+C`.
 ## Configuration
 
 ```bash
-# Seuil à 80 %, anti-doublon de 5 secondes
-uv run alfred-local --threshold 0.80 --duplicate-window 5
+# Seuil explicite et anti-doublon de 5 secondes
+uv run alfred-local --threshold 0.08 --duplicate-window 5
 
 # Exiger « alfred » dans la phrase courante ou dans celle juste avant
 uv run alfred-local --require-alfred
@@ -79,6 +89,12 @@ uv run alfred-local --intent-mode flat
 
 # Deux appels : opération, puis objet
 uv run alfred-local --intent-mode factorized
+
+# Comparer au Laya vanilla, sans transformation latente
+uv run alfred-local --intent-mode flat --no-specialization
+
+# Charger un autre export compatible de Laya Studio
+uv run alfred-local --specialization-dir ./mon-export-laya
 
 # Voir les microphones, puis en sélectionner un
 uv run alfred-local --list-devices
@@ -157,8 +173,10 @@ Les seules actions proposées à Laya sont :
 - `allume la clim` ;
 - `éteins la clim`.
 
-Le mode `flat` effectue un seul appel Laya avec cette liste complète. Le mode `factorized` effectue
-réellement deux appels successifs sur la même transcription : le premier choisit `allumer`,
+Le mode `flat` encode la phrase une seule fois puis applique la transformation résiduelle et les
+prototypes exportés par Laya Studio. `--no-specialization` rétablit l'appel Laya vanilla avec la
+liste complète. Le mode `factorized` effectue réellement deux appels successifs sur la même
+transcription : le premier choisit `allumer`,
 `éteindre` ou `do_nothing`, puis le second choisit l'objet (`les lumières`, `l'halogène`, `le salon`,
 `la salle à manger`, `le luminaire du salon`, `les leds`, `la clim` ou `do_nothing`). Les deux jeux
 de probabilités et leurs latences sont affichés séparément. La confiance utilisée par le seuil est
@@ -171,7 +189,10 @@ Avant l'anti-doublon et l'inférence Laya, une normalisation ciblée corrige les
 transcription originale reste affichée, puis le terminal montre explicitement la transformation avec
 `Normalisation ASR`. Cette correction s'applique aux deux modes d'intention.
 
-Une intention sous le seuil est remplacée par `do_nothing`. Les mêmes phrases répétées pendant la
+Une intention sous le seuil est remplacée par `do_nothing`. Le seuil automatique vaut `0.08` pour
+la géométrie spécialisée et `0.70` pour Laya vanilla ; `--threshold` permet de le remplacer. Ces
+échelles diffèrent parce que l'artefact est un classifieur à 14 prototypes, pas la tête de décision
+calibrée de Laya. Les mêmes phrases répétées pendant la
 fenêtre anti-doublon sont ignorées. Pour chaque phrase, le terminal distingue l'action proposée par
 Laya, les probabilités, l'état du contrôle Alfred, l'**ACTION FINALE** et si son exécution est
 autorisée. Le message suivant précise s'il s'agissait d'une simulation ou d'un appel Home Assistant.
@@ -185,13 +206,28 @@ explicites à `do_nothing`, après l'inférence Laya. Les probabilités brutes r
 Le même filtre exige une forme de commande directe ou de requête polie avant toute action ; une
 simple mention d'un équipement ne suffit pas.
 
-## Utiliser plus tard un export Laya Studio
+## Spécialisation Laya Studio
 
-Le contrat à conserver est `IntentEngine.predict(transcript) -> IntentResult`, défini dans
-`src/alfred_voice_assistant/intent.py`. `LayaIntentEngine` isole les runtimes MLX et PyTorch. Pour
-employer un modèle spécialisé exporté depuis
-[Laya Studio](https://github.com/Hantlowt/laya-studio), ajoutez une autre implémentation de cette
-interface puis instanciez-la dans `cli.py` ; la capture Vosk et le worker asynchrone ne changent pas.
+Le fichier `specialization/laya_studio_task.yaml` définit la politique à 14 classes. Laya Studio a
+généré 140 exemples d'ajustement, 70 de validation et 140 cas cachés indépendants, puis sept
+stratégies ont été comparées. La transformation résiduelle a été retenue : son exactitude brute sur
+les cas cachés est de **74,3 %**, contre **63,6 %** pour MLX vanilla et **62,9 %** pour PyTorch
+vanilla. Les résultats complets et les graines sont dans `specialization/benchmark.json`.
+
+Les deux exports d'environ 2,3 Mio se trouvent sous
+`src/alfred_voice_assistant/specializations/`. Ils contiennent uniquement une matrice, des
+prototypes, le manifeste et les sondes de fidélité ; les modèles de base restent téléchargés au
+premier lancement. Chaque export a passé le contrôle de rechargement en processus neuf de Laya
+Studio.
+
+Un artefact n'est **pas universel entre MLX et PyTorch** : Laya Studio le verrouille au backend, à
+l'identifiant du checkpoint et à sa révision. Les deux transformations ont donc été ajustées et
+exportées séparément à partir des mêmes exemples. Le chargeur choisit automatiquement celle qui
+correspond au backend et refuse explicitement tout mélange.
+
+Le contrat applicatif reste `IntentEngine.predict(transcript) -> IntentResult`, défini dans
+`src/alfred_voice_assistant/intent.py`. Un futur export compatible peut être testé avec
+`--specialization-dir`, sans modifier la capture Vosk, le worker asynchrone ou Home Assistant.
 
 ## Développement
 

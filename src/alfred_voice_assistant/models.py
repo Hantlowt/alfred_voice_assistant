@@ -13,9 +13,11 @@ from pathlib import Path
 VOSK_MODEL_NAME = "vosk-model-small-fr-0.22"
 VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
 LAYA_REPO_ID = "aac6fef/laya-multilingual-mlx"
+LAYA_REVISION = "f2b4faf51023039425946074e2cf1361d2db11d5"
 LAYA_DIR_NAME = "laya-multilingual-mlx"
-LAYA_TORCH_REPO_ID = "convaiinnovations/laya"
-LAYA_TORCH_DIR_NAME = "laya-multilingual-pytorch"
+LAYA_TORCH_REPO_ID = "convaiinnovations/laya-multilingual"
+LAYA_TORCH_REVISION = "1720e3e3357cfe1e281542e223f8273b0890ca34"
+LAYA_TORCH_DIR_NAME = "laya-multilingual-pytorch-v2"
 
 
 def _valid_vosk_model(path: Path) -> bool:
@@ -27,10 +29,7 @@ def _valid_laya_model(path: Path) -> bool:
 
 
 def _valid_laya_torch_model(path: Path) -> bool:
-    checkpoint = path / "multilingual"
-    return (checkpoint / "rl_agent_config.json").is_file() and (
-        checkpoint / "model.safetensors"
-    ).is_file()
+    return (path / "rl_agent_config.json").is_file() and (path / "model.safetensors").is_file()
 
 
 def resolve_laya_backend(requested: str = "auto") -> str:
@@ -108,7 +107,7 @@ def ensure_laya_model(models_dir: Path, backend: str = "auto") -> Path:
     print(f"Modèle Laya absent, téléchargement unique de {LAYA_REPO_ID}…")
     with tempfile.TemporaryDirectory(prefix="laya-", dir=models_dir) as temp_name:
         temp_dir = Path(temp_name) / "snapshot"
-        snapshot_download(repo_id=LAYA_REPO_ID, local_dir=temp_dir)
+        snapshot_download(repo_id=LAYA_REPO_ID, revision=LAYA_REVISION, local_dir=temp_dir)
         if not _valid_laya_model(temp_dir):
             raise RuntimeError("Le modèle Laya téléchargé est incomplet.")
         shutil.move(str(temp_dir), destination)
@@ -131,8 +130,8 @@ def ensure_laya_torch_model(models_dir: Path) -> Path:
         temp_dir = Path(temp_name) / "snapshot"
         snapshot_download(
             repo_id=LAYA_TORCH_REPO_ID,
+            revision=LAYA_TORCH_REVISION,
             local_dir=temp_dir,
-            allow_patterns=["multilingual/**"],
         )
         if not _valid_laya_torch_model(temp_dir):
             raise RuntimeError("Le modèle Laya PyTorch téléchargé est incomplet.")

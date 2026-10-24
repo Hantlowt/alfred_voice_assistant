@@ -1,0 +1,56 @@
+{
+  "attribution": "Laya model weights by Convai Innovations and upstream contributors.",
+  "backend_compatibility": [
+    "mlx"
+  ],
+  "base_model": "aac6fef/laya-multilingual-mlx",
+  "base_revision": "f2b4faf51023039425946074e2cf1361d2db11d5",
+  "created_at": "2026-10-24T17:11:40.067298+00:00",
+  "decision_schema": {
+    "class_descriptions": {
+      "allume l'halogène": "Allumer spécifiquement la lampe halogène, y compris la variante orale halogène.",
+      "allume la clim": "Allumer, activer ou démarrer la climatisation ou le climatiseur.",
+      "allume la salle à manger": "Allumer les éclairages de la salle à manger.",
+      "allume le salon": "Allumer tous les éclairages de la zone salon.",
+      "allume les leds": "Allumer les rubans ou éclairages LED.",
+      "allume les lumières": "Allumer toutes les lumières sans limiter la commande à une pièce.",
+      "do_nothing": "Aucune commande sûre : conversation, simple mention, propos rapporté, négation, hypothèse, ambiguïté, phrase non adressée à l'assistant, action annulée ou équipement non pris en charge.",
+      "éteins l'halogène": "Éteindre spécifiquement la lampe halogène.",
+      "éteins la clim": "Éteindre, désactiver ou arrêter la climatisation ou le climatiseur.",
+      "éteins la salle à manger": "Éteindre les éclairages de la salle à manger.",
+      "éteins le luminaire du salon": "Éteindre uniquement le luminaire principal du salon.",
+      "éteins le salon": "Éteindre tous les éclairages de la zone salon.",
+      "éteins les leds": "Éteindre les rubans ou éclairages LED.",
+      "éteins les lumières": "Éteindre toutes les lumières sans limiter la commande à une pièce."
+    },
+    "labels": [
+      "do_nothing",
+      "éteins les lumières",
+      "allume les lumières",
+      "allume l'halogène",
+      "allume le salon",
+      "allume la salle à manger",
+      "éteins l'halogène",
+      "éteins le luminaire du salon",
+      "éteins le salon",
+      "éteins la salle à manger",
+      "allume les leds",
+      "éteins les leds",
+      "allume la clim",
+      "éteins la clim"
+    ],
+    "question": "Choisis exactement une action. N'agis que pour une commande domotique directe, affirmative et actuelle. Ignore les conversations, descriptions, questions sans ordre, propos rapportés, négations, corrections, hypothèses et phrases non adressées à l'assistant. En cas de doute, choisis do_nothing. Distingue la zone salon du luminaire spécifique du salon et distingue la salle à manger des lumières générales.",
+    "type": "choice"
+  },
+  "format": "laya-specialization",
+  "format_version": 1,
+  "license": "Apache-2.0",
+  "name": "alfred-actions-mlx",
+  "package_version": "0.1.0",
+  "self_contained": false,
+  "specialization_config": {
+    "ridge": 1.0,
+    "temperature": 0.2
+  },
+  "strategy": "residual_embedding_transform"
+}

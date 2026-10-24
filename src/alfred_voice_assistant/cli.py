@@ -10,6 +10,7 @@ from .app import IntentWorker, Terminal, run_microphone
 from .home_assistant import HomeAssistantExecutor, SimulationExecutor
 from .intent import LayaIntentEngine
 from .models import ensure_models, resolve_laya_backend
+from .specialization import bundled_specialization
 
 
 def _device(value: str) -> int | str:
@@ -30,7 +31,12 @@ def build_parser() -> argparse.ArgumentParser:
         )
     )
     parser = argparse.ArgumentParser(description="Assistant vocal local Vosk + Laya")
-    parser.add_argument("--threshold", type=float, default=0.70, help="seuil de confiance (0 à 1)")
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="seuil de confiance (défaut : 0.08 spécialisé, 0.70 vanilla)",
+    )
     parser.add_argument(
         "--duplicate-window",
         type=float,
@@ -59,6 +65,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="auto choisit MLX sur Apple Silicon et PyTorch CPU ailleurs",
     )
     parser.add_argument(
+        "--specialization",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="utilise l'artefact Laya Studio fourni en mode flat",
+    )
+    parser.add_argument(
+        "--specialization-dir",
+        type=Path,
+        help="artefact Laya Studio personnalisé (manifest.json + vectors.safetensors)",
+    )
+    parser.add_argument(
         "--execute-home-assistant",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -79,19 +96,35 @@ def main() -> None:
 
         print(sd.query_devices())
         return
-    if not 0 <= args.threshold <= 1:
+    if args.threshold is not None and not 0 <= args.threshold <= 1:
         raise SystemExit("--threshold doit être compris entre 0 et 1.")
     if args.duplicate_window < 0:
         raise SystemExit("--duplicate-window doit être positif.")
 
     terminal = Terminal()
     backend = resolve_laya_backend(args.laya_backend)
+    use_specialization = args.specialization and args.intent_mode == "flat"
+    specialization_path = None
+    if use_specialization:
+        specialization_path = (
+            args.specialization_dir.expanduser().resolve()
+            if args.specialization_dir
+            else bundled_specialization(backend)
+        )
+    threshold = args.threshold if args.threshold is not None else (0.08 if use_specialization else 0.70)
     terminal.line(f"Modèles locaux : {args.models_dir.expanduser().resolve()}")
     terminal.line(
         "Mode Alfred obligatoire : " + ("ACTIVÉ" if args.require_alfred else "DÉSACTIVÉ")
     )
     terminal.line(f"Mode de décision Laya : {args.intent_mode}")
     terminal.line(f"Backend Laya : {backend}")
+    if specialization_path is not None:
+        terminal.line(f"Spécialisation Laya Studio : {specialization_path}")
+    elif args.intent_mode == "factorized" and args.specialization:
+        terminal.line("Spécialisation Laya Studio : non applicable au mode factorized")
+    else:
+        terminal.line("Spécialisation Laya Studio : DÉSACTIVÉE")
+    terminal.line(f"Seuil de confiance : {threshold:.0%}")
     if args.execute_home_assistant:
         executor = HomeAssistantExecutor(
             args.home_assistant_url,
@@ -103,11 +136,16 @@ def main() -> None:
         executor = SimulationExecutor()
         terminal.line("Home Assistant : simulation (aucun appel réel)")
     vosk_path, laya_path = ensure_models(args.models_dir.expanduser().resolve(), backend)
-    engine = LayaIntentEngine(laya_path, mode=args.intent_mode, backend=backend)
+    engine = LayaIntentEngine(
+        laya_path,
+        mode=args.intent_mode,
+        backend=backend,
+        specialization_path=specialization_path,
+    )
     worker = IntentWorker(
         engine,
         terminal,
-        args.threshold,
+        threshold,
         args.duplicate_window,
         require_alfred=args.require_alfred,
         action_executor=executor,

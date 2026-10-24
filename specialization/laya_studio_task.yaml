@@ -1,0 +1,69 @@
+name: alfred_voice_actions_fr
+description: >-
+  Classer une transcription vocale française destinée à un assistant domotique dans une liste
+  fermée d'actions. Les commandes affirmatives, actuelles et directement adressées à l'assistant
+  déclenchent l'action précise. Toute conversation ordinaire, négation, citation, demande rapportée,
+  hypothèse, hésitation, équipement non pris en charge ou phrase ambiguë doit produire do_nothing.
+domain: french_smart_home_voice_control
+decision:
+  type: choice
+  labels:
+    - do_nothing
+    - éteins les lumières
+    - allume les lumières
+    - allume l'halogène
+    - allume le salon
+    - allume la salle à manger
+    - éteins l'halogène
+    - éteins le luminaire du salon
+    - éteins le salon
+    - éteins la salle à manger
+    - allume les leds
+    - éteins les leds
+    - allume la clim
+    - éteins la clim
+  question: >-
+    Choisis exactement une action. N'agis que pour une commande domotique directe, affirmative et
+    actuelle. Ignore les conversations, descriptions, questions sans ordre, propos rapportés,
+    négations, corrections, hypothèses et phrases non adressées à l'assistant. En cas de doute,
+    choisis do_nothing. Distingue la zone salon du luminaire spécifique du salon et distingue la
+    salle à manger des lumières générales.
+  class_descriptions:
+    do_nothing: >-
+      Aucune commande sûre : conversation, simple mention, propos rapporté, négation, hypothèse,
+      ambiguïté, phrase non adressée à l'assistant, action annulée ou équipement non pris en charge.
+    éteins les lumières: Éteindre toutes les lumières sans limiter la commande à une pièce.
+    allume les lumières: Allumer toutes les lumières sans limiter la commande à une pièce.
+    allume l'halogène: Allumer spécifiquement la lampe halogène, y compris la variante orale halogène.
+    allume le salon: Allumer tous les éclairages de la zone salon.
+    allume la salle à manger: Allumer les éclairages de la salle à manger.
+    éteins l'halogène: Éteindre spécifiquement la lampe halogène.
+    éteins le luminaire du salon: Éteindre uniquement le luminaire principal du salon.
+    éteins le salon: Éteindre tous les éclairages de la zone salon.
+    éteins la salle à manger: Éteindre les éclairages de la salle à manger.
+    allume les leds: Allumer les rubans ou éclairages LED.
+    éteins les leds: Éteindre les rubans ou éclairages LED.
+    allume la clim: Allumer, activer ou démarrer la climatisation ou le climatiseur.
+    éteins la clim: Éteindre, désactiver ou arrêter la climatisation ou le climatiseur.
+semantic_concepts:
+  - commande vocale domotique française
+  - éclairage par pièce et par luminaire
+  - climatisation
+  - rejet conservateur des phrases non exécutables
+positive_concepts:
+  - impératif direct
+  - requête polie affirmative
+  - action et cible toutes deux explicites
+negative_concepts:
+  - négation
+  - propos rapporté ou citation
+  - conversation ambiante
+  - commande hypothétique ou annulée
+  - cible ambiguë
+policy: >-
+  Le coût d'un faux déclenchement est supérieur à celui d'une commande ignorée. Favoriser
+  do_nothing dès qu'une action ou sa cible n'est pas explicite. Les formulations avec Alfred sont
+  possibles, mais le contrôle obligatoire du prénom est appliqué séparément par l'application.
+metadata:
+  language: fr
+  application: alfred_voice_assistant

@@ -1,0 +1,34 @@
+{
+  "task": "alfred_voice_actions_fr",
+  "specialization_examples": 140,
+  "validation_examples": 70,
+  "hidden_examples": 140,
+  "seeds": {
+    "specialization": 43,
+    "validation": 50042,
+    "hidden": 90042
+  },
+  "accuracy": {
+    "mlx": {
+      "baseline": 0.635714,
+      "prompt_only": 0.6,
+      "nearest_prototype": 0.478571,
+      "multiclass_centroids": 0.478571,
+      "whitened_prototypes": 0.714286,
+      "residual_embedding_transform": 0.742857,
+      "multi_vector_steering": 0.55
+    },
+    "pytorch": {
+      "baseline": 0.628571,
+      "prompt_only": 0.6,
+      "nearest_prototype": 0.478571,
+      "multiclass_centroids": 0.478571,
+      "whitened_prototypes": 0.714286,
+      "residual_embedding_transform": 0.742857,
+      "multi_vector_steering": 0.55
+    }
+  },
+  "selected_strategy": "residual_embedding_transform",
+  "recommended_runtime_threshold": 0.08,
+  "notes": "Accuracy is measured before the application's Alfred gate and deterministic safety filters. The runtime threshold is conservative and changes coverage, so it must be evaluated separately from raw argmax accuracy."
+}

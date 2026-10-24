@@ -6,13 +6,19 @@ INSTALL_DIR="${ALFRED_INSTALL_DIR:-$HOME/.local/share/alfred_voice_assistant}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/alfred_voice_assistant"
 TOKEN_FILE="$CONFIG_DIR/home_assistant_token"
 BIN_DIR="$HOME/.local/bin"
+MODE="${1:-install}"
+
+if [[ "$MODE" != "install" && "$MODE" != "--update" ]]; then
+    echo "Usage : install.sh [--update]" >&2
+    exit 2
+fi
 
 if [[ "$(uname -s)" != "Linux" ]]; then
     echo "Ce script d'installation cible Linux (Lubuntu/Debian/Ubuntu)." >&2
     exit 1
 fi
 
-if command -v apt-get >/dev/null 2>&1; then
+if [[ "$MODE" == "install" ]] && command -v apt-get >/dev/null 2>&1; then
     if [[ "$EUID" -eq 0 ]]; then
         APT=(apt-get)
     elif command -v sudo >/dev/null 2>&1; then
@@ -23,7 +29,7 @@ if command -v apt-get >/dev/null 2>&1; then
     fi
     "${APT[@]}" update
     "${APT[@]}" install -y ca-certificates curl git build-essential portaudio19-dev libasound2-dev
-else
+elif [[ "$MODE" == "install" ]]; then
     echo "apt-get est introuvable : installez Git, curl, PortAudio et ALSA manuellement." >&2
     exit 1
 fi
@@ -57,17 +63,21 @@ if [[ ! -s "$TOKEN_FILE" ]]; then
     fi
     printf '%s\n' "$HA_TOKEN_INPUT" >"$TOKEN_FILE"
     unset HA_TOKEN_INPUT
-    chmod 600 "$TOKEN_FILE"
 fi
+chmod 600 "$TOKEN_FILE"
 
-if [[ -e "$BIN_DIR/alfred-local" && ! -L "$BIN_DIR/alfred-local" ]]; then
-    echo "Impossible de créer le lanceur : $BIN_DIR/alfred-local existe déjà." >&2
-    exit 1
-fi
+for launcher in alfred-local alfred-update; do
+    if [[ -e "$BIN_DIR/$launcher" && ! -L "$BIN_DIR/$launcher" ]]; then
+        echo "Impossible de créer le lanceur : $BIN_DIR/$launcher existe déjà." >&2
+        exit 1
+    fi
+done
 ln -sfn "$INSTALL_DIR/.venv/bin/alfred-local" "$BIN_DIR/alfred-local"
+ln -sfn "$INSTALL_DIR/update.sh" "$BIN_DIR/alfred-update"
 
 echo
-echo "Installation terminée. Ajoutez $BIN_DIR au PATH si nécessaire."
+echo "Installation/mise à jour terminée. Ajoutez $BIN_DIR au PATH si nécessaire."
+echo "Mettre à jour plus tard : $BIN_DIR/alfred-update"
 echo "Lister les microphones : $BIN_DIR/alfred-local --list-devices"
 echo "Démarrer en simulation : $BIN_DIR/alfred-local --device INDEX --require-alfred"
 echo "Démarrer avec Home Assistant :"
