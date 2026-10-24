@@ -33,7 +33,7 @@ def test_threshold_falls_back_to_do_nothing() -> None:
     worker._handle("allume")
 
     assert any("ACTION FINALE" in line and "do_nothing" in line for line in terminal.lines)
-    assert any("EXÉCUTION SIMULÉE" in line and "NON" in line for line in terminal.lines)
+    assert any("EXÉCUTION AUTORISÉE" in line and "NON" in line for line in terminal.lines)
 
 
 def test_required_alfred_blocks_an_otherwise_valid_action() -> None:
@@ -64,7 +64,7 @@ def test_required_alfred_allows_the_simulated_action() -> None:
     )
 
     assert any("ACTION FINALE" in line and "allume les lumières" in line for line in terminal.lines)
-    assert any("EXÉCUTION SIMULÉE" in line and "OUI" in line for line in terminal.lines)
+    assert any("EXÉCUTION AUTORISÉE" in line and "OUI" in line for line in terminal.lines)
     assert any("simulation uniquement" in line for line in terminal.lines)
 
 

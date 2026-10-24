@@ -132,16 +132,24 @@ class IntentEngine(Protocol):
     def predict(self, transcript: str) -> IntentResult: ...
 
 
-class LayaMlxIntentEngine:
-    """Adaptateur minimal autour de l'API publique de laya-mlx."""
+class LayaIntentEngine:
+    """Adaptateur commun aux API publiques Laya MLX et Laya PyTorch."""
 
-    def __init__(self, model_path: Path, mode: str = "flat") -> None:
-        import laya_mlx as laya
-
+    def __init__(self, model_path: Path, mode: str = "flat", backend: str = "mlx") -> None:
         if mode not in {"flat", "factorized"}:
             raise ValueError(f"Mode d'intention inconnu : {mode}")
-        print("Chargement de Laya MLX en mémoire…")
-        self._agent = laya.load(str(model_path), dtype="float16")
+        if backend == "mlx":
+            import laya_mlx as laya
+
+            print("Chargement de Laya MLX en mémoire…")
+            self._agent = laya.load(str(model_path), dtype="float16")
+        elif backend == "torch":
+            import laya
+
+            print("Chargement de Laya PyTorch sur CPU en mémoire…")
+            self._agent = laya.load(str(model_path), subfolder="multilingual", device="cpu")
+        else:
+            raise ValueError(f"Backend Laya inconnu : {backend}")
         self._mode = mode
 
     def predict(self, transcript: str) -> IntentResult:
@@ -205,3 +213,7 @@ class LayaMlxIntentEngine:
         if choice not in probabilities:
             raise RuntimeError(f"Réponse Laya invalide pour {report_label}.")
         return choice, ProbabilityReport(report_label, probabilities, latency_ms)
+
+
+# Compatibilité pour les imports existants du prototype.
+LayaMlxIntentEngine = LayaIntentEngine

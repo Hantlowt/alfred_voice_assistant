@@ -3,8 +3,8 @@ from alfred_voice_assistant.app import (
     RecentTranscripts,
     normalize_asr_transcript,
     safety_override_reason,
-    simulate_action,
 )
+from alfred_voice_assistant.home_assistant import SimulationExecutor
 
 
 def test_recent_transcripts_normalizes_and_expires() -> None:
@@ -16,12 +16,9 @@ def test_recent_transcripts_normalizes_and_expires() -> None:
 
 
 def test_simulate_action_never_runs_a_real_action() -> None:
-    lines: list[str] = []
+    executor = SimulationExecutor()
 
-    simulate_action("allume les leds", lines.append)
-    simulate_action("do_nothing", lines.append)
-
-    assert lines == ["🏠 [simulation uniquement] allume les leds"]
+    assert executor.execute("allume les leds") == "🏠 [simulation uniquement] allume les leds"
 
 
 def test_safety_override_catches_negation_and_reported_speech() -> None:

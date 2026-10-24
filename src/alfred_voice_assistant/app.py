@@ -8,11 +8,11 @@ import re
 import sys
 import threading
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .home_assistant import ActionExecutor, SimulationExecutor
 from .intent import IntentEngine
 
 _SPACE_OR_PUNCTUATION = re.compile(r"[^\wÀ-ÿ]+", re.UNICODE)
@@ -171,6 +171,7 @@ class IntentWorker:
         confidence_threshold: float,
         duplicate_window: float,
         require_alfred: bool = False,
+        action_executor: ActionExecutor | None = None,
         queue_size: int = 16,
     ) -> None:
         self._engine = engine
@@ -178,6 +179,7 @@ class IntentWorker:
         self._threshold = confidence_threshold
         self._recent = RecentTranscripts(duplicate_window)
         self._alfred_gate = AlfredGate(require_alfred)
+        self._action_executor = action_executor or SimulationExecutor()
         self._queue: queue.Queue[PendingUtterance | None] = queue.Queue(maxsize=queue_size)
         self._thread = threading.Thread(target=self._run, name="laya-intents", daemon=True)
 
@@ -208,7 +210,12 @@ class IntentWorker:
         try:
             self._queue.put_nowait(None)
         except queue.Full:
-            return
+            try:
+                self._queue.get_nowait()
+                self._queue.task_done()
+            except queue.Empty:
+                pass
+            self._queue.put_nowait(None)
         self._thread.join(timeout=5)
 
     def _run(self) -> None:
@@ -218,8 +225,8 @@ class IntentWorker:
                 if item is None:
                     return
                 self._handle(item.transcript, item.alfred)
-            except Exception as error:  # une erreur d'inférence ne doit pas arrêter l'écoute
-                self._terminal.line(f"Erreur Laya : {type(error).__name__}: {error}")
+            except Exception as error:  # une erreur ne doit pas arrêter l'écoute
+                self._terminal.line(f"Erreur de traitement : {type(error).__name__}: {error}")
             finally:
                 self._queue.task_done()
 
@@ -270,15 +277,10 @@ class IntentWorker:
 
         self._terminal.line(f"⚡ ACTION FINALE              : {final_action}")
         if final_action == "do_nothing":
-            self._terminal.line(f"🚫 EXÉCUTION SIMULÉE          : NON — {reason}")
+            self._terminal.line(f"🚫 EXÉCUTION AUTORISÉE        : NON — {reason}")
         else:
-            self._terminal.line("✅ EXÉCUTION SIMULÉE          : OUI")
-            simulate_action(final_action, self._terminal.line)
-
-
-def simulate_action(intent: str, output: Callable[[str], None] = print) -> None:
-    if intent != "do_nothing":
-        output(f"🏠 [simulation uniquement] {intent}")
+            self._terminal.line("✅ EXÉCUTION AUTORISÉE        : OUI")
+            self._terminal.line(self._action_executor.execute(final_action))
 
 
 def run_microphone(

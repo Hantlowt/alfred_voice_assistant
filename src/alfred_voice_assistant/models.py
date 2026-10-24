@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import platform
 import shutil
 import sys
 import tempfile
@@ -13,6 +14,8 @@ VOSK_MODEL_NAME = "vosk-model-small-fr-0.22"
 VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
 LAYA_REPO_ID = "aac6fef/laya-multilingual-mlx"
 LAYA_DIR_NAME = "laya-multilingual-mlx"
+LAYA_TORCH_REPO_ID = "convaiinnovations/laya"
+LAYA_TORCH_DIR_NAME = "laya-multilingual-pytorch"
 
 
 def _valid_vosk_model(path: Path) -> bool:
@@ -21,6 +24,27 @@ def _valid_vosk_model(path: Path) -> bool:
 
 def _valid_laya_model(path: Path) -> bool:
     return (path / "mlx_config.json").is_file() and any(path.glob("*.safetensors"))
+
+
+def _valid_laya_torch_model(path: Path) -> bool:
+    checkpoint = path / "multilingual"
+    return (checkpoint / "rl_agent_config.json").is_file() and (
+        checkpoint / "model.safetensors"
+    ).is_file()
+
+
+def resolve_laya_backend(requested: str = "auto") -> str:
+    if requested == "auto":
+        if platform.system() == "Darwin" and platform.machine() == "arm64":
+            return "mlx"
+        return "torch"
+    if requested not in {"mlx", "torch"}:
+        raise ValueError(f"Backend Laya inconnu : {requested}")
+    if requested == "mlx" and not (
+        platform.system() == "Darwin" and platform.machine() == "arm64"
+    ):
+        raise RuntimeError("Le backend MLX requiert un Mac Apple Silicon.")
+    return requested
 
 
 def _download(url: str, destination: Path) -> None:
@@ -66,8 +90,12 @@ def ensure_vosk_model(models_dir: Path) -> Path:
     return destination
 
 
-def ensure_laya_model(models_dir: Path) -> Path:
+def ensure_laya_model(models_dir: Path, backend: str = "auto") -> Path:
     """Retourne un snapshot Laya local, en le téléchargeant atomiquement si nécessaire."""
+    backend = resolve_laya_backend(backend)
+    if backend == "torch":
+        return ensure_laya_torch_model(models_dir)
+
     destination = models_dir / LAYA_DIR_NAME
     if _valid_laya_model(destination):
         return destination
@@ -87,6 +115,31 @@ def ensure_laya_model(models_dir: Path) -> Path:
     return destination
 
 
-def ensure_models(models_dir: Path) -> tuple[Path, Path]:
+def ensure_laya_torch_model(models_dir: Path) -> Path:
+    """Télécharge le checkpoint multilingue PyTorch utilisé sur Linux/CPU."""
+    destination = models_dir / LAYA_TORCH_DIR_NAME
+    if _valid_laya_torch_model(destination):
+        return destination
+    if destination.exists():
+        raise RuntimeError(f"Modèle Laya PyTorch incomplet : supprimez {destination} puis relancez.")
+
+    from huggingface_hub import snapshot_download
+
+    models_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Modèle Laya PyTorch absent, téléchargement unique de {LAYA_TORCH_REPO_ID}…")
+    with tempfile.TemporaryDirectory(prefix="laya-torch-", dir=models_dir) as temp_name:
+        temp_dir = Path(temp_name) / "snapshot"
+        snapshot_download(
+            repo_id=LAYA_TORCH_REPO_ID,
+            local_dir=temp_dir,
+            allow_patterns=["multilingual/**"],
+        )
+        if not _valid_laya_torch_model(temp_dir):
+            raise RuntimeError("Le modèle Laya PyTorch téléchargé est incomplet.")
+        shutil.move(str(temp_dir), destination)
+    return destination
+
+
+def ensure_models(models_dir: Path, backend: str = "auto") -> tuple[Path, Path]:
     """Prépare tous les poids avant de démarrer le microphone."""
-    return ensure_vosk_model(models_dir), ensure_laya_model(models_dir)
+    return ensure_vosk_model(models_dir), ensure_laya_model(models_dir, backend)
