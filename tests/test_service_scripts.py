@@ -58,3 +58,18 @@ def test_service_runner_builds_configured_arguments(tmp_path: Path) -> None:
     assert "--quiet" in arguments
     assert "--execute-home-assistant" in arguments
     assert arguments[arguments.index("--threshold") + 1] == "0.08"
+
+
+def test_update_launcher_resolves_its_symbolic_link(tmp_path: Path) -> None:
+    launcher = tmp_path / "alfred-update"
+    launcher.symlink_to(ROOT / "update.sh")
+
+    completed = subprocess.run(
+        ["bash", str(launcher)],
+        env={**os.environ, "ALFRED_UPDATE_DRY_RUN": "true"},
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert Path(completed.stdout.strip()) == ROOT / "install.sh"
