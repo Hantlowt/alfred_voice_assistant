@@ -17,9 +17,12 @@ class ServiceCall:
     entity_ids: tuple[str, ...]
 
 
-ALL_LIGHTS = (
+LIGHTS_TO_TURN_ON = (
     "light.halogene_socket_1",
-    "light.lampe_socket_1",
+    "light.luminaire_2",
+)
+LIGHTS_TO_TURN_OFF = (
+    "light.halogene_socket_1",
     "light.luminaire",
     "light.luminaire_2",
     "light.led",
@@ -27,12 +30,13 @@ ALL_LIGHTS = (
 SALON_LIGHTS = ("light.halogene_socket_1", "light.luminaire", "light.led")
 
 HOME_ASSISTANT_ACTIONS = {
-    "allume les lumières": ServiceCall("light", "turn_on", ALL_LIGHTS),
-    "éteins les lumières": ServiceCall("light", "turn_off", ALL_LIGHTS),
+    "allume les lumières": ServiceCall("light", "turn_on", LIGHTS_TO_TURN_ON),
+    "éteins les lumières": ServiceCall("light", "turn_off", LIGHTS_TO_TURN_OFF),
     "allume l'halogène": ServiceCall("light", "turn_on", ("light.halogene_socket_1",)),
     "éteins l'halogène": ServiceCall("light", "turn_off", ("light.halogene_socket_1",)),
-    "allume le salon": ServiceCall("light", "turn_on", SALON_LIGHTS),
+    "allume le salon": ServiceCall("light", "turn_on", ("light.halogene_socket_1",)),
     "éteins le salon": ServiceCall("light", "turn_off", SALON_LIGHTS),
+    "allume le luminaire du salon": ServiceCall("light", "turn_on", ("light.luminaire",)),
     "éteins le luminaire du salon": ServiceCall("light", "turn_off", ("light.luminaire",)),
     "allume la salle à manger": ServiceCall("light", "turn_on", ("light.luminaire_2",)),
     "éteins la salle à manger": ServiceCall("light", "turn_off", ("light.luminaire_2",)),

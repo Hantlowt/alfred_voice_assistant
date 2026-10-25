@@ -75,8 +75,17 @@ Pour quitter : `Ctrl+C`.
 ## Configuration
 
 ```bash
-# Seuil explicite et anti-doublon de 5 secondes
+# Le seuil est désactivé par défaut ; le réactiver explicitement à 8 %
 uv run alfred-local --threshold 0.08 --duplicate-window 5
+
+# Debug sans microphone : saisir une phrase puis appuyer sur Entrée
+uv run alfred-local --text-mode
+
+# Déploiement silencieux : aucune transcription, probabilité ou confirmation normale
+uv run alfred-local --quiet --execute-home-assistant
+
+# Même mode, avec Alfred obligatoire et de vrais appels Home Assistant
+uv run alfred-local --text --require-alfred --execute-home-assistant
 
 # Exiger « alfred » dans la phrase courante ou dans celle juste avant
 uv run alfred-local --require-alfred
@@ -84,7 +93,7 @@ uv run alfred-local --require-alfred
 # Désactiver explicitement cette exigence (c'est aussi la valeur par défaut)
 uv run alfred-local --no-require-alfred
 
-# Un seul appel : choix direct parmi les 14 actions (mode par défaut)
+# Un seul appel : choix direct parmi les 15 choix (14 commandes + do_nothing, mode par défaut)
 uv run alfred-local --intent-mode flat
 
 # Deux appels : opération, puis objet
@@ -123,9 +132,11 @@ instance est :
 
 | Action | Appel Home Assistant |
 |---|---|
-| Toutes les lumières | `light.turn_on/off` sur les cinq entités `light.*` |
+| Allumer les lumières | `light.turn_on` sur `light.halogene_socket_1` et `light.luminaire_2` |
+| Éteindre les lumières | `light.turn_off` sur l'halogène, les deux luminaires et les LEDs |
 | Halogène | `light.halogene_socket_1` |
-| Salon | `light.halogene_socket_1`, `light.luminaire`, `light.led` |
+| Allumer le salon | `light.halogene_socket_1` uniquement |
+| Éteindre le salon | `light.halogene_socket_1`, `light.luminaire`, `light.led` |
 | Luminaire du salon | `light.luminaire` |
 | Salle à manger | `light.luminaire_2` |
 | LEDs | `light.led` |
@@ -142,7 +153,9 @@ fournie avec `HOME_ASSISTANT_URL`, et le fichier avec `HOME_ASSISTANT_TOKEN_FILE
 
 ## Comportement
 
-Vosk affiche les transcriptions partielles sur une ligne temporaire. Chaque phrase finalisée est
+Vosk affiche les transcriptions partielles sur une ligne temporaire. Avec `--text-mode` (ou
+`--text`), aucune capture audio ni aucun modèle Vosk n'est chargé : chaque ligne validée par Entrée
+est envoyée au même pipeline que les phrases vocales. Chaque phrase finalisée est
 placée dans une file non bloquante et traitée par un worker Laya distinct, afin que l'inférence ne
 bloque jamais le callback audio. Le terminal affiche ensuite :
 
@@ -151,10 +164,10 @@ bloque jamais le callback audio. Le terminal affiche ensuite :
 - toutes les probabilités renvoyées par Laya ;
 - la latence de l'appel Laya (chargement du modèle exclu).
 
-Avec `--require-alfred`, une action n'est retenue que si Vosk a transcrit le mot exact `alfred` dans
-la phrase courante ou dans la phrase finalisée immédiatement précédente. Cela permet aussi de dire
-« Alfred », puis la commande dans une seconde phrase. L'autorisation ne se propage pas à une
-troisième phrase. Chaque résultat indique clairement l'état de ce contrôle.
+Avec `--require-alfred`, une action n'est retenue que si la transcription ou le texte contient le
+mot exact `alfred` dans la phrase courante ou dans la phrase immédiatement précédente. Cela permet
+aussi de dire ou saisir « Alfred », puis la commande dans une seconde phrase. L'autorisation ne se
+propage pas à une troisième phrase. Chaque résultat indique clairement l'état de ce contrôle.
 
 Les seules actions proposées à Laya sont :
 
@@ -164,6 +177,7 @@ Les seules actions proposées à Laya sont :
 - `allume l'halogène` ;
 - `allume le salon` ;
 - `allume la salle à manger` ;
+- `allume le luminaire du salon` ;
 - `éteins l'halogène` ;
 - `éteins le luminaire du salon` ;
 - `éteins le salon` ;
@@ -181,18 +195,32 @@ transcription : le premier choisit `allumer`,
 `la salle à manger`, `le luminaire du salon`, `les leds`, `la clim` ou `do_nothing`). Les deux jeux
 de probabilités et leurs latences sont affichés séparément. La confiance utilisée par le seuil est
 la plus faible des deux réponses sélectionnées : les deux doivent donc être suffisamment sûres.
-Une combinaison absente de la liste d'actions, comme allumer le luminaire spécifique du salon, est
-ramenée à `do_nothing`.
+Toute combinaison opération/objet non déclarée est ramenée à `do_nothing`.
 
 Avant l'anti-doublon et l'inférence Laya, une normalisation ciblée corrige les erreurs Vosk connues
-`la le jeune` et `eugène` en `halogène`, `climat` en `clim`, ainsi que `est un` en `éteins`. La
-transcription originale reste affichée, puis le terminal montre explicitement la transformation avec
-`Normalisation ASR`. Cette correction s'applique aux deux modes d'intention.
+`la le jeune` et `eugène` en `halogène`, `est la logement` ou `éteint la Lorraine` en
+`éteins l'halogène`, `climat` ou `clime` en `clim`, `les aides` ou `les l'aide` en `les leds`,
+ainsi que `est un`, `et un`, `étant`, `éteint` ou `éteindre` en `éteins` et `à l'homme` en `allume`. Les
+corrections de verbes ne s'appliquent que devant l'un des sept objets pris en charge, afin de ne pas
+réécrire une conversation ordinaire comme « c'est un très beau salon ». La transcription originale
+reste affichée, puis le terminal montre explicitement la transformation avec `Normalisation ASR`.
+Cette correction s'applique aux deux modes d'intention.
 
-Une intention sous le seuil est remplacée par `do_nothing`. Le seuil automatique vaut `0.08` pour
-la géométrie spécialisée et `0.70` pour Laya vanilla ; `--threshold` permet de le remplacer. Ces
-échelles diffèrent parce que l'artefact est un classifieur à 14 prototypes, pas la tête de décision
-calibrée de Laya. Les mêmes phrases répétées pendant la
+Après contrôle du mot-clé `alfred`, seule la partie qui le suit est envoyée à Laya : cela évite que
+la casse du prénom ou une amorce comme « attends » perturbe l'embedding. Pour une commande dont le verbe et l'un des sept objets sont
+explicites, un routeur déterministe vérifie aussi la cible. Il prime sur une proposition Laya
+incohérente (par exemple `allume le salon` classé comme clim) et bloque une cible inconnue au lieu de
+laisser le modèle deviner. Les probabilités Laya sont tout de même calculées et affichées.
+
+Avec `--quiet` (ou `-q`), le programme ne produit aucune sortie normale : transcriptions,
+probabilités, chargement des modèles et confirmations Home Assistant sont masqués. Une erreur fatale
+reste affichée afin que le service puisse être diagnostiqué.
+
+Le seuil de confiance est désactivé par défaut : la meilleure intention proposée n'est donc pas
+rejetée en fonction de son pourcentage. `--threshold VALEUR` permet de réactiver ce filtre entre 0
+et 1 ; une intention sous ce seuil est alors remplacée par `do_nothing`. Les garde-fous
+déterministes et le contrôle Alfred restent actifs indépendamment du seuil. Les mêmes phrases
+répétées pendant la
 fenêtre anti-doublon sont ignorées. Pour chaque phrase, le terminal distingue l'action proposée par
 Laya, les probabilités, l'état du contrôle Alfred, l'**ACTION FINALE** et si son exécution est
 autorisée. Le message suivant précise s'il s'agissait d'une simulation ou d'un appel Home Assistant.
@@ -208,11 +236,14 @@ simple mention d'un équipement ne suffit pas.
 
 ## Spécialisation Laya Studio
 
-Le fichier `specialization/laya_studio_task.yaml` définit la politique à 14 classes. Laya Studio a
-généré 140 exemples d'ajustement, 70 de validation et 140 cas cachés indépendants, puis sept
-stratégies ont été comparées. La transformation résiduelle a été retenue : son exactitude brute sur
-les cas cachés est de **74,3 %**, contre **63,6 %** pour MLX vanilla et **62,9 %** pour PyTorch
-vanilla. Les résultats complets et les graines sont dans `specialization/benchmark.json`.
+Le fichier `specialization/laya_studio_task.yaml` définit la politique à 15 classes (14 commandes et
+`do_nothing`). Laya Studio a généré 150 exemples d'ajustement et 75 de validation. Ils sont complétés
+par 64 exemples uniques issus de `specialization/curated_examples.yaml`, qui ciblent notamment les
+commandes canoniques, les requêtes polies et les confusions phonétiques. Sur les 148 cas cachés
+restant après suppression des recouvrements exacts, la transformation résiduelle atteint **73,65 %**
+sur MLX comme sur PyTorch, contre **57,43 %** pour Laya vanilla, soit **+16,22 points**. Elle obtient
+également 100 % sur les 14 commandes canoniques et 97,33 % sur les 75 variantes ciblées. Les
+résultats, les graines et le réglage de régularisation sont dans `specialization/benchmark.json`.
 
 Les deux exports d'environ 2,3 Mio se trouvent sous
 `src/alfred_voice_assistant/specializations/`. Ils contiennent uniquement une matrice, des

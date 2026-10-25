@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .home_assistant import ActionExecutor, SimulationExecutor
-from .intent import IntentEngine
+from .intent import ACTION_BY_PARTS, IntentEngine
 
 _SPACE_OR_PUNCTUATION = re.compile(r"[^\wÀ-ÿ]+", re.UNICODE)
 _NEGATION = re.compile(
@@ -34,11 +34,12 @@ _POLITE_REQUEST = re.compile(
 )
 _DIRECT_REQUEST = re.compile(
     r"^(?:s il (?:te|vous) plaît\s+)?(?:allum\w*|étein\w*|etein\w*|activ\w*|"
-    r"désactiv\w*|desactiv\w*|coup\w*)\b",
+    r"désactiv\w*|desactiv\w*|coup\w*|éclair\w*|eclair\w*)\b",
     re.IGNORECASE,
 )
 _ACTION_TERM = re.compile(
-    r"\b(?:allum\w*|étein\w*|etein\w*|activ\w*|désactiv\w*|desactiv\w*|coup\w*)\b",
+    r"\b(?:allum\w*|étein\w*|etein\w*|activ\w*|désactiv\w*|desactiv\w*|"
+    r"coup\w*|éclair\w*|eclair\w*)\b",
     re.IGNORECASE,
 )
 _ALFRED = re.compile(r"\balfred\b", re.IGNORECASE)
@@ -46,18 +47,59 @@ _HALOGENE_ASR_ALIASES = (
     re.compile(r"\bla\s+le\s+jeune\b", re.IGNORECASE),
     re.compile(r"\beug[eèé]ne\b", re.IGNORECASE),
 )
+_ETEINS_HALOGENE_ASR_ALIAS = re.compile(
+    r"(?<![’'])\b(?:est|et|éteint|eteint)\s+la\s+(?:logement|lorraine)\b",
+    re.IGNORECASE,
+)
 _CLIM_ASR_ALIAS_WITH_ARTICLE = re.compile(r"\ble\s+climat\b", re.IGNORECASE)
-_CLIM_ASR_ALIAS = re.compile(r"\bclimat\b", re.IGNORECASE)
-_ETEINS_ASR_ALIAS = re.compile(r"\best\s+un\b", re.IGNORECASE)
+_CLIM_ASR_ALIAS = re.compile(r"\b(?:climat|clime)\b", re.IGNORECASE)
+_SUPPORTED_TARGET = (
+    r"(?=\s+(?:(?:le|la|les|du|des|l)\s+)?"
+    r"(?:lumières?|halogène|salon|salle|luminaire|leds?|aides?|clim)\b)"
+)
+_ETEINS_ASR_ALIAS = re.compile(
+    rf"(?<![’'])\b(?:est|et)\s+une?\b{_SUPPORTED_TARGET}",
+    re.IGNORECASE,
+)
+_ETEINS_SPELLING_ALIAS = re.compile(
+    rf"\b(?:éteint|eteint|éteindre|eteindre|étant|etant)\b{_SUPPORTED_TARGET}",
+    re.IGNORECASE,
+)
+_ALLUME_ASR_ALIAS = re.compile(
+    rf"\b(?:à|a)\s+l[’']?homme\b{_SUPPORTED_TARGET}",
+    re.IGNORECASE,
+)
+_LEDS_ASR_ALIAS = re.compile(
+    r"\b(?P<action>allum\w*|étein\w*|etein\w*)\s+les?\s+"
+    r"(?:aides?|l[’']?aides?|laides?)\b",
+    re.IGNORECASE,
+)
+_TURN_ON = re.compile(r"\b(?:allum\w*|activ\w*|éclair\w*|eclair\w*)\b", re.IGNORECASE)
+_TURN_OFF = re.compile(
+    r"\b(?:étein\w*|etein\w*|désactiv\w*|desactiv\w*|coup\w*)\b",
+    re.IGNORECASE,
+)
+_EXPLICIT_TARGETS = (
+    (re.compile(r"\bluminaire(?:\s+(?:du|de\s+le)\s+salon)?\b", re.IGNORECASE), "le luminaire du salon"),
+    (re.compile(r"\bsalle\s+(?:à|a)\s+manger\b", re.IGNORECASE), "la salle à manger"),
+    (re.compile(r"\bhalogène\b", re.IGNORECASE), "l'halogène"),
+    (re.compile(r"\bleds?\b", re.IGNORECASE), "les leds"),
+    (re.compile(r"\bclim(?:atisation|atiseur)?\b", re.IGNORECASE), "la clim"),
+    (re.compile(r"\bsalon\b", re.IGNORECASE), "le salon"),
+    (re.compile(r"\blumières?\b", re.IGNORECASE), "les lumières"),
+)
 
 
 class Terminal:
-    def __init__(self) -> None:
+    def __init__(self, quiet: bool = False) -> None:
         self._lock = threading.Lock()
+        self.quiet = quiet
         self._interactive = sys.stdout.isatty()
         self._partial = ""
 
     def partial(self, text: str) -> None:
+        if self.quiet:
+            return
         with self._lock:
             self._partial = text
             if self._interactive:
@@ -66,12 +108,16 @@ class Terminal:
                 print(f"[partiel] {text}", flush=True)
 
     def clear_partial(self) -> None:
+        if self.quiet:
+            return
         with self._lock:
             self._partial = ""
             if self._interactive:
                 print("\r\033[2K", end="", flush=True)
 
     def line(self, text: str = "") -> None:
+        if self.quiet:
+            return
         with self._lock:
             if self._interactive:
                 print("\r\033[2K", end="")
@@ -102,12 +148,40 @@ class RecentTranscripts:
 def normalize_asr_transcript(transcript: str) -> str:
     """Corrige quelques confusions Vosk connues avant la classification d'intention."""
     normalized = transcript
+    normalized = _ETEINS_HALOGENE_ASR_ALIAS.sub("éteins l'halogène", normalized)
     for alias in _HALOGENE_ASR_ALIASES:
         normalized = alias.sub("halogène", normalized)
     normalized = _CLIM_ASR_ALIAS_WITH_ARTICLE.sub("la clim", normalized)
     normalized = _CLIM_ASR_ALIAS.sub("clim", normalized)
     normalized = _ETEINS_ASR_ALIAS.sub("éteins", normalized)
+    normalized = _ETEINS_SPELLING_ALIAS.sub("éteins", normalized)
+    normalized = _ALLUME_ASR_ALIAS.sub("allume", normalized)
+    normalized = _LEDS_ASR_ALIAS.sub(lambda match: f"{match.group('action')} les leds", normalized)
     return " ".join(normalized.split())
+
+
+def transcript_for_intent(transcript: str) -> str:
+    """Garde la commande après le mot-clé, géré séparément, pour stabiliser Laya."""
+    keyword = list(_ALFRED.finditer(transcript))
+    relevant = transcript[keyword[-1].end() :] if keyword else transcript
+    return " ".join(relevant.split()).strip(" ,;:—-")
+
+
+def deterministic_action(transcript: str) -> str | None:
+    """Résout uniquement les commandes dont opération et cible sont explicites."""
+    normalized = _SPACE_OR_PUNCTUATION.sub(" ", transcript.casefold()).strip()
+    turns_on = bool(_TURN_ON.search(normalized))
+    turns_off = bool(_TURN_OFF.search(normalized))
+    if turns_on == turns_off:
+        return None
+    object_name = next(
+        (name for pattern, name in _EXPLICIT_TARGETS if pattern.search(normalized)),
+        None,
+    )
+    if object_name is None:
+        return None
+    operation = "allumer" if turns_on else "éteindre"
+    return ACTION_BY_PARTS.get((operation, object_name))
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,12 +220,14 @@ def safety_override_reason(transcript: str, intent: str = "do_nothing") -> str |
         return "négation détectée"
     if _REPORTED_SPEECH.search(normalized):
         return "propos rapporté détecté"
-    without_keyword = _ALFRED.sub(" ", normalized).strip()
+    without_keyword = transcript_for_intent(normalized)
     if intent != "do_nothing" and not (
         _DIRECT_REQUEST.search(without_keyword)
         or (_POLITE_REQUEST.search(without_keyword) and _ACTION_TERM.search(without_keyword))
     ):
         return "commande directe non détectée"
+    if intent != "do_nothing" and deterministic_action(transcript) is None:
+        return "équipement pris en charge non détecté clairement"
     return None
 
 
@@ -218,6 +294,10 @@ class IntentWorker:
             self._queue.put_nowait(None)
         self._thread.join(timeout=5)
 
+    def wait_until_idle(self) -> None:
+        """Attend les résultats déjà soumis, utile pour le mode texte interactif."""
+        self._queue.join()
+
     def _run(self) -> None:
         while True:
             item = self._queue.get()
@@ -236,18 +316,27 @@ class IntentWorker:
         alfred: AlfredAuthorization | None = None,
     ) -> None:
         alfred = alfred or AlfredAuthorization(True, "mode désactivé — mot-clé non requis")
-        result = self._engine.predict(transcript)
+        result = self._engine.predict(transcript_for_intent(transcript))
         raw_confidence = result.confidence
         safety_reason = safety_override_reason(transcript, result.intent)
-        model_accepted = (
-            safety_reason is None
-            and (result.intent == "do_nothing" or raw_confidence >= self._threshold)
-        )
-        candidate = result.intent if model_accepted else "do_nothing"
+        explicit_action = deterministic_action(transcript)
+        if safety_reason is None and explicit_action is not None:
+            model_accepted = True
+            candidate = explicit_action
+        else:
+            model_accepted = (
+                safety_reason is None
+                and (result.intent == "do_nothing" or raw_confidence >= self._threshold)
+            )
+            candidate = result.intent if model_accepted else "do_nothing"
         blocked_by_alfred = candidate != "do_nothing" and not alfred.allowed
         final_action = "do_nothing" if blocked_by_alfred else candidate
 
         self._terminal.line(f"🧠 Action proposée par Laya : {result.intent}")
+        if explicit_action is not None and explicit_action != result.intent:
+            self._terminal.line(
+                f"🧭 Commande explicite retenue   : {explicit_action} (prioritaire sur Laya)"
+            )
         self._terminal.line(f"🔑 Contrôle Alfred           : {alfred.status}")
         for report in result.reports:
             probabilities = " · ".join(
@@ -343,4 +432,26 @@ def run_microphone(
         terminal.clear_partial()
         terminal.line("Arrêt demandé.")
     finally:
+        worker.close()
+
+
+def run_text_input(worker: IntentWorker, terminal: Terminal) -> None:
+    """Boucle de debug interactive utilisant le même pipeline que les phrases Vosk finales."""
+    terminal.line("Mode texte — saisissez une phrase puis Entrée. Ctrl+C ou Ctrl+D pour quitter.")
+    worker.start()
+    try:
+        while True:
+            try:
+                transcript = input("" if getattr(terminal, "quiet", False) else "alfred> ").strip()
+            except EOFError:
+                break
+            if not transcript:
+                continue
+            terminal.line(f"⌨️  Transcription : {transcript}")
+            worker.submit(transcript)
+            worker.wait_until_idle()
+    except KeyboardInterrupt:
+        terminal.line()
+    finally:
+        terminal.line("Arrêt demandé.")
         worker.close()

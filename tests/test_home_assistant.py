@@ -25,6 +25,28 @@ class FakeResponse:
 
 def test_every_executable_action_has_a_home_assistant_mapping() -> None:
     assert set(HOME_ASSISTANT_ACTIONS) == set(ACTIONS) - {"do_nothing"}
+    luminaire = HOME_ASSISTANT_ACTIONS["allume le luminaire du salon"]
+    assert (luminaire.domain, luminaire.service, luminaire.entity_ids) == (
+        "light",
+        "turn_on",
+        ("light.luminaire",),
+    )
+
+
+def test_group_actions_use_the_requested_asymmetric_entities() -> None:
+    assert HOME_ASSISTANT_ACTIONS["allume le salon"].entity_ids == (
+        "light.halogene_socket_1",
+    )
+    assert HOME_ASSISTANT_ACTIONS["allume les lumières"].entity_ids == (
+        "light.halogene_socket_1",
+        "light.luminaire_2",
+    )
+    assert HOME_ASSISTANT_ACTIONS["éteins les lumières"].entity_ids == (
+        "light.halogene_socket_1",
+        "light.luminaire",
+        "light.luminaire_2",
+        "light.led",
+    )
 
 
 def test_home_assistant_uses_the_expected_service_and_entity(tmp_path: Path) -> None:

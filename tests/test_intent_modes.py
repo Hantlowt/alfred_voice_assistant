@@ -1,4 +1,4 @@
-from alfred_voice_assistant.intent import LayaMlxIntentEngine
+from alfred_voice_assistant.intent import ACTION_BY_PARTS, ACTIONS, LayaMlxIntentEngine
 
 
 class FakeAgent:
@@ -43,3 +43,25 @@ def test_factorized_mode_calls_laya_twice_and_combines_answers() -> None:
         "éteins le luminaire du salon",
         "éteins le luminaire du salon",
     ]
+
+
+def test_every_supported_object_has_on_and_off_actions() -> None:
+    expected = {
+        "allume les lumières",
+        "éteins les lumières",
+        "allume l'halogène",
+        "éteins l'halogène",
+        "allume le salon",
+        "éteins le salon",
+        "allume la salle à manger",
+        "éteins la salle à manger",
+        "allume le luminaire du salon",
+        "éteins le luminaire du salon",
+        "allume les leds",
+        "éteins les leds",
+        "allume la clim",
+        "éteins la clim",
+    }
+
+    assert set(ACTIONS) == expected | {"do_nothing"}
+    assert set(ACTION_BY_PARTS.values()) == expected

@@ -5,12 +5,13 @@
   ],
   "base_model": "convaiinnovations/laya-multilingual",
   "base_revision": "1720e3e3357cfe1e281542e223f8273b0890ca34",
-  "created_at": "2026-10-24T17:11:44.210637+00:00",
+  "created_at": "2026-10-25T16:04:24.071698+00:00",
   "decision_schema": {
     "class_descriptions": {
       "allume l'halogène": "Allumer spécifiquement la lampe halogène, y compris la variante orale halogène.",
       "allume la clim": "Allumer, activer ou démarrer la climatisation ou le climatiseur.",
       "allume la salle à manger": "Allumer les éclairages de la salle à manger.",
+      "allume le luminaire du salon": "Allumer uniquement le luminaire principal du salon.",
       "allume le salon": "Allumer tous les éclairages de la zone salon.",
       "allume les leds": "Allumer les rubans ou éclairages LED.",
       "allume les lumières": "Allumer toutes les lumières sans limiter la commande à une pièce.",
@@ -30,6 +31,7 @@
       "allume l'halogène",
       "allume le salon",
       "allume la salle à manger",
+      "allume le luminaire du salon",
       "éteins l'halogène",
       "éteins le luminaire du salon",
       "éteins le salon",
@@ -45,11 +47,11 @@
   "format": "laya-specialization",
   "format_version": 1,
   "license": "Apache-2.0",
-  "name": "alfred-actions-pytorch",
+  "name": "alfred-voice-actions-fr-torch",
   "package_version": "0.1.0",
   "self_contained": false,
   "specialization_config": {
-    "ridge": 1.0,
+    "ridge": 0.3,
     "temperature": 0.2
   },
   "strategy": "residual_embedding_transform"

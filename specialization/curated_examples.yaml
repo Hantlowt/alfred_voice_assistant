@@ -1,0 +1,94 @@
+# Exemples courts ajoutés aux données générées par Laya Studio.
+# Ils couvrent les commandes canoniques, les formulations polies et les confusions ASR fréquentes.
+# Le pipeline d'ajustement ignore les doublons déjà présents dans le jeu généré.
+examples:
+  do_nothing:
+    - "c'est un salon lumineux"
+    - "il a dit d'allumer les lumières"
+    - "n'allume pas les leds"
+    - "peut-être éteindre la clim demain"
+    - "le luminaire du salon est joli"
+  éteins les lumières:
+    - "éteins toutes les lumières"
+    - "Alfred coupe toutes les lumières"
+    - "peux-tu éteindre les lumières"
+    - "eteint les lumières"
+    - "est un les lumières"
+  allume les lumières:
+    - "allume toutes les lumières"
+    - "Alfred éclaire tout"
+    - "peux-tu allumer les lumières"
+    - "active les lumières"
+    - "à l'homme les lumières"
+  allume l'halogène:
+    - "allume l'halogène"
+    - "Alfred allume l'halogène"
+    - "peux-tu allumer l'halogène"
+    - "allume eugène"
+    - "à l'homme la le jeune"
+  allume le salon:
+    - "allume le salon"
+    - "Alfred éclaire le salon"
+    - "peux-tu allumer le salon"
+    - "active les lumières du salon"
+    - "à l'homme le salon"
+  allume la salle à manger:
+    - "allume la salle à manger"
+    - "Alfred éclaire la salle à manger"
+    - "peux-tu allumer la salle à manger"
+    - "active la salle à manger"
+    - "à l'homme la salle à manger"
+  allume le luminaire du salon:
+    - "allume le luminaire du salon"
+    - "Alfred allume le luminaire du salon"
+    - "peux-tu allumer le luminaire du salon"
+    - "active le luminaire du salon"
+    - "à l'homme le luminaire du salon"
+  éteins l'halogène:
+    - "éteins l'halogène"
+    - "Alfred éteins l'halogène"
+    - "peux-tu éteindre l'halogène"
+    - "est un eugène"
+    - "eteint la le jeune"
+  éteins le luminaire du salon:
+    - "éteins le luminaire du salon"
+    - "Alfred éteins le luminaire du salon"
+    - "peux-tu éteindre le luminaire du salon"
+    - "coupe le luminaire du salon"
+    - "est un le luminaire du salon"
+  éteins le salon:
+    - "éteins le salon"
+    - "Alfred coupe le salon"
+    - "peux-tu éteindre le salon"
+    - "désactive les lumières du salon"
+    - "est un le salon"
+  éteins la salle à manger:
+    - "éteins la salle à manger"
+    - "Alfred coupe la salle à manger"
+    - "peux-tu éteindre la salle à manger"
+    - "désactive la salle à manger"
+    - "est un la salle à manger"
+  allume les leds:
+    - "allume les leds"
+    - "Alfred allume les leds"
+    - "peux-tu allumer les leds"
+    - "active les leds"
+    - "à l'homme les aides"
+  éteins les leds:
+    - "éteins les leds"
+    - "Alfred éteins les leds"
+    - "peux-tu éteindre les leds"
+    - "désactive les leds"
+    - "eteint les aides"
+  allume la clim:
+    - "allume la clim"
+    - "Alfred allume la clim"
+    - "peux-tu allumer la clim"
+    - "active le climatiseur"
+    - "à l'homme le climat"
+  éteins la clim:
+    - "éteins la clim"
+    - "Alfred éteins la clim"
+    - "peux-tu éteindre la clim"
+    - "désactive le climatiseur"
+    - "est un le climat"

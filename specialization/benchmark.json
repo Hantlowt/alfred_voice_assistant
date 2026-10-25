@@ -1,34 +1,31 @@
 {
   "task": "alfred_voice_actions_fr",
-  "specialization_examples": 140,
-  "validation_examples": 70,
-  "hidden_examples": 140,
+  "generated_specialization_examples": 150,
+  "curated_specialization_examples_added": 64,
+  "validation_examples": 75,
+  "hidden_examples_generated": 150,
+  "hidden_examples_evaluated_after_leakage_removal": 148,
   "seeds": {
-    "specialization": 43,
-    "validation": 50042,
-    "hidden": 90042
+    "specialization": 44,
+    "validation": 50043,
+    "hidden": 90043
   },
   "accuracy": {
     "mlx": {
-      "baseline": 0.635714,
-      "prompt_only": 0.6,
-      "nearest_prototype": 0.478571,
-      "multiclass_centroids": 0.478571,
-      "whitened_prototypes": 0.714286,
-      "residual_embedding_transform": 0.742857,
-      "multi_vector_steering": 0.55
+      "baseline": 0.574324,
+      "residual_embedding_transform": 0.736486,
+      "canonical_commands": 1.0,
+      "curated_command_variants": 0.973333
     },
     "pytorch": {
-      "baseline": 0.628571,
-      "prompt_only": 0.6,
-      "nearest_prototype": 0.478571,
-      "multiclass_centroids": 0.478571,
-      "whitened_prototypes": 0.714286,
-      "residual_embedding_transform": 0.742857,
-      "multi_vector_steering": 0.55
+      "baseline": 0.574324,
+      "residual_embedding_transform": 0.736486,
+      "canonical_commands": 1.0,
+      "curated_command_variants": 0.973333
     }
   },
   "selected_strategy": "residual_embedding_transform",
-  "recommended_runtime_threshold": 0.08,
-  "notes": "Accuracy is measured before the application's Alfred gate and deterministic safety filters. The runtime threshold is conservative and changes coverage, so it must be evaluated separately from raw argmax accuracy."
+  "ridge": 0.3,
+  "runtime_threshold_default": null,
+  "notes": "Accuracy is measured before the application's Alfred gate, ASR normalization and deterministic safety filters. Exact text overlaps with the specialization set were removed from the hidden evaluation. The curated set is stored in specialization/curated_examples.yaml."
 }

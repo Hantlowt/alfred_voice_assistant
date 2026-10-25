@@ -12,6 +12,7 @@
       "allume l'halogène",
       "allume le salon",
       "allume la salle à manger",
+      "allume le luminaire du salon",
       "éteins l'halogène",
       "éteins le luminaire du salon",
       "éteins le salon",
@@ -22,7 +23,7 @@
       "éteins la clim"
     ],
     "params": {
-      "ridge": 1.0,
+      "ridge": 0.3,
       "temperature": 0.2
     },
     "strategy": "residual_embedding_transform"
@@ -33,6 +34,7 @@
         "allume l'halogène": "Allumer spécifiquement la lampe halogène, y compris la variante orale halogène.",
         "allume la clim": "Allumer, activer ou démarrer la climatisation ou le climatiseur.",
         "allume la salle à manger": "Allumer les éclairages de la salle à manger.",
+        "allume le luminaire du salon": "Allumer uniquement le luminaire principal du salon.",
         "allume le salon": "Allumer tous les éclairages de la zone salon.",
         "allume les leds": "Allumer les rubans ou éclairages LED.",
         "allume les lumières": "Allumer toutes les lumières sans limiter la commande à une pièce.",
@@ -52,6 +54,7 @@
         "allume l'halogène",
         "allume le salon",
         "allume la salle à manger",
+        "allume le luminaire du salon",
         "éteins l'halogène",
         "éteins le luminaire du salon",
         "éteins le salon",
@@ -78,7 +81,7 @@
       "commande hypothétique ou annulée",
       "cible ambiguë"
     ],
-    "policy": "Le coût d'un faux déclenchement est supérieur à celui d'une commande ignorée. Favoriser do_nothing dès qu'une action ou sa cible n'est pas explicite. Les formulations avec Alfred sont possibles, mais le contrôle obligatoire du prénom est appliqué séparément par l'application.",
+    "policy": "Le coût d'un faux déclenchement est supérieur à celui d'une commande ignorée. Favoriser do_nothing dès qu'une action ou sa cible n'est pas explicite. Les formulations avec Alfred sont possibles, mais le contrôle obligatoire du prénom est appliqué séparément par l'application. Inclure dans les exemples des transcriptions ASR plausibles et mal orthographiées sans créer de nouvel objet : « est un » ou « et un » pour « éteins », « à l'homme » pour « allume », « la le jeune » ou « eugène » pour « halogène », « climat » ou « clime » pour « clim », « les aides » pour « les leds », ainsi que les variantes sans accents « eteint », « eteindre » et « allume ».",
     "positive_concepts": [
       "impératif direct",
       "requête polie affirmative",
@@ -88,7 +91,8 @@
       "commande vocale domotique française",
       "éclairage par pièce et par luminaire",
       "climatisation",
-      "rejet conservateur des phrases non exécutables"
+      "rejet conservateur des phrases non exécutables",
+      "transcriptions phonétiques imparfaites produites par la reconnaissance vocale"
     ]
   }
 }
