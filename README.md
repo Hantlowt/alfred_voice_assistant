@@ -24,8 +24,9 @@ curl -fsSL https://raw.githubusercontent.com/Hantlowt/alfred_voice_assistant/mai
 ```
 
 Le script installe PortAudio/ALSA, Git, `uv`, clone le dépôt dans
-`~/.local/share/alfred_voice_assistant`, installe le backend Laya PyTorch CPU, demande le token Home
-Assistant sans l'afficher puis le sauvegarde avec les permissions `600` dans
+`~/.local/share/alfred_voice_assistant`, installe le backend Laya PyTorch CPU, puis demande le token,
+l'URL Home Assistant et le microphone. Il installe enfin un service système `systemd`, le démarre et
+l'active pour les démarrages suivants. Le token est sauvegardé avec les permissions `600` dans
 `~/.config/alfred_voice_assistant/home_assistant_token`.
 
 Une installation existante se met ensuite à jour avec :
@@ -35,7 +36,8 @@ alfred-update
 ```
 
 Cette commande effectue un `git pull --ff-only`, resynchronise exactement `uv.lock`, conserve le
-token et recrée les lanceurs. Relancer la commande `curl` initiale produit le même résultat.
+token et la configuration, recrée les lanceurs puis redémarre le service. Relancer la commande
+`curl` initiale produit le même résultat.
 
 Ensuite :
 
@@ -49,6 +51,33 @@ Ensuite :
 # Le fragment unique d'un nom fonctionne aussi
 ~/.local/bin/alfred-local --device "USB Audio" --require-alfred --execute-home-assistant
 ```
+
+### Service en arrière-plan
+
+La configuration persistante se trouve dans
+`~/.config/alfred_voice_assistant/service.env`. L'installation active par défaut l'exécution réelle
+Home Assistant, le contrôle `alfred`, la spécialisation et le mode silencieux. Pour modifier l'URL,
+le microphone ou un autre paramètre puis redémarrer automatiquement :
+
+```bash
+alfred-service edit
+```
+
+Commandes d'exploitation :
+
+```bash
+alfred-service status   # état et dernier éventuel message d'erreur
+alfred-service logs     # suivre les logs systemd
+alfred-service restart  # redémarrer après une intervention
+alfred-service stop
+alfred-service start
+```
+
+Le service `alfred-voice-assistant.service` est rattaché à `multi-user.target`, fonctionne sous le
+compte qui a lancé l'installation et redémarre automatiquement après un échec. Ne lancez donc pas
+la commande d'installation avec `sudo` : le script ne l'utilise que pour enregistrer le service.
+En mode silencieux, le journal reste vide pendant le fonctionnement normal ; les erreurs fatales y
+restent disponibles.
 
 ## Lancement
 

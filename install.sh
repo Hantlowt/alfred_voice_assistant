@@ -5,6 +5,7 @@ REPO_URL="${ALFRED_REPO_URL:-https://github.com/Hantlowt/alfred_voice_assistant.
 INSTALL_DIR="${ALFRED_INSTALL_DIR:-$HOME/.local/share/alfred_voice_assistant}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/alfred_voice_assistant"
 TOKEN_FILE="$CONFIG_DIR/home_assistant_token"
+SERVICE_CONFIG="$CONFIG_DIR/service.env"
 BIN_DIR="$HOME/.local/bin"
 MODE="${1:-install}"
 
@@ -66,7 +67,35 @@ if [[ ! -s "$TOKEN_FILE" ]]; then
 fi
 chmod 600 "$TOKEN_FILE"
 
-for launcher in alfred-local alfred-update; do
+if [[ ! -f "$SERVICE_CONFIG" ]]; then
+    DEFAULT_HA_URL="${HOME_ASSISTANT_URL:-http://homeassistant.local:8123}"
+    echo "Microphones détectés :"
+    "$INSTALL_DIR/.venv/bin/alfred-local" --list-devices || \
+        echo "Impossible de lister les microphones maintenant ; vous pourrez configurer le nom plus tard." >&2
+    printf "Adresse Home Assistant [%s] : " "$DEFAULT_HA_URL" >/dev/tty
+    IFS= read -r HA_URL_INPUT </dev/tty
+    HA_URL_INPUT="${HA_URL_INPUT:-$DEFAULT_HA_URL}"
+    printf "Microphone (index ou fragment du nom, vide = périphérique par défaut) : " >/dev/tty
+    IFS= read -r ALFRED_DEVICE_INPUT </dev/tty
+    {
+        printf 'HOME_ASSISTANT_URL=%q\n' "$HA_URL_INPUT"
+        printf 'HOME_ASSISTANT_TOKEN_FILE=%q\n' "$TOKEN_FILE"
+        printf 'ALFRED_DEVICE=%q\n' "$ALFRED_DEVICE_INPUT"
+        printf 'ALFRED_MODELS_DIR=%q\n' "$HOME/.cache/alfred-voice-assistant"
+        printf '%s\n' 'ALFRED_REQUIRE_ALFRED=true'
+        printf '%s\n' 'ALFRED_QUIET=true'
+        printf '%s\n' 'ALFRED_EXECUTE_HOME_ASSISTANT=true'
+        printf '%s\n' 'ALFRED_SPECIALIZATION=true'
+        printf '%s\n' 'ALFRED_INTENT_MODE=flat'
+        printf '%s\n' 'ALFRED_LAYA_BACKEND=auto'
+        printf '%s\n' 'ALFRED_DUPLICATE_WINDOW=3'
+        printf '%s\n' 'ALFRED_THRESHOLD='
+    } >"$SERVICE_CONFIG"
+    chmod 600 "$SERVICE_CONFIG"
+    unset HA_URL_INPUT ALFRED_DEVICE_INPUT
+fi
+
+for launcher in alfred-local alfred-update alfred-service; do
     if [[ -e "$BIN_DIR/$launcher" && ! -L "$BIN_DIR/$launcher" ]]; then
         echo "Impossible de créer le lanceur : $BIN_DIR/$launcher existe déjà." >&2
         exit 1
@@ -74,10 +103,20 @@ for launcher in alfred-local alfred-update; do
 done
 ln -sfn "$INSTALL_DIR/.venv/bin/alfred-local" "$BIN_DIR/alfred-local"
 ln -sfn "$INSTALL_DIR/update.sh" "$BIN_DIR/alfred-update"
+ln -sfn "$INSTALL_DIR/service.sh" "$BIN_DIR/alfred-service"
+
+if command -v systemctl >/dev/null 2>&1; then
+    "$INSTALL_DIR/service.sh" install
+else
+    echo "Avertissement : systemd absent, service automatique non installé." >&2
+fi
 
 echo
 echo "Installation/mise à jour terminée. Ajoutez $BIN_DIR au PATH si nécessaire."
 echo "Mettre à jour plus tard : $BIN_DIR/alfred-update"
+echo "Configurer le service : $BIN_DIR/alfred-service edit"
+echo "État du service : $BIN_DIR/alfred-service status"
+echo "Logs du service : $BIN_DIR/alfred-service logs"
 echo "Lister les microphones : $BIN_DIR/alfred-local --list-devices"
 echo "Démarrer en simulation : $BIN_DIR/alfred-local --device INDEX --require-alfred"
 echo "Démarrer avec Home Assistant :"
