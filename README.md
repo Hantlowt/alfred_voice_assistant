@@ -50,6 +50,9 @@ Ensuite :
 
 # Le fragment unique d'un nom fonctionne aussi
 ~/.local/bin/alfred-local --device "USB Audio" --require-alfred --execute-home-assistant
+
+# Amplifier par deux une voix distante avant de l'envoyer à Vosk
+~/.local/bin/alfred-local --device "USB Audio" --mic-gain 2.0 --require-alfred
 ```
 
 ### Service en arrière-plan
@@ -72,6 +75,11 @@ alfred-service restart  # redémarrer après une intervention
 alfred-service stop
 alfred-service start
 ```
+
+Pour une voix distante, réglez par exemple `ALFRED_MIC_GAIN=2.0` dans `service.env`. La valeur
+`1.0` laisse le signal intact. Un gain trop fort amplifie le bruit et provoque de l'écrêtement ;
+commencez à `2.0`, puis essayez `3.0` seulement si nécessaire. Le gain matériel du microphone,
+quand il est disponible dans `alsamixer`, donne généralement un meilleur résultat.
 
 Le service `alfred-voice-assistant.service` est rattaché à `multi-user.target`, fonctionne sous le
 compte qui a lancé l'installation et redémarre automatiquement après un échec. Ne lancez donc pas
@@ -137,6 +145,9 @@ uv run alfred-local --specialization-dir ./mon-export-laya
 # Voir les microphones, puis en sélectionner un
 uv run alfred-local --list-devices
 uv run alfred-local --device 2
+
+# Amplifier le signal du microphone avant Vosk
+uv run alfred-local --device 2 --mic-gain 2.0
 
 # Choisir l'emplacement des modèles
 uv run alfred-local --models-dir .models

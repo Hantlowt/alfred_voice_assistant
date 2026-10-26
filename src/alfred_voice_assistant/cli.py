@@ -45,6 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="fenêtre anti-doublon en secondes",
     )
     parser.add_argument("--device", type=_device, help="index ou fragment du nom du microphone")
+    parser.add_argument(
+        "--mic-gain",
+        type=float,
+        default=1.0,
+        help="gain logiciel appliqué avant Vosk (1.0 = aucun gain)",
+    )
     parser.add_argument("--models-dir", type=Path, default=default_models)
     parser.add_argument("--list-devices", action="store_true", help="liste les périphériques audio")
     parser.add_argument(
@@ -114,6 +120,8 @@ def main() -> None:
         raise SystemExit("--threshold doit être compris entre 0 et 1.")
     if args.duplicate_window < 0:
         raise SystemExit("--duplicate-window doit être positif.")
+    if not 0 < args.mic_gain <= 10:
+        raise SystemExit("--mic-gain doit être supérieur à 0 et inférieur ou égal à 10.")
 
     terminal = Terminal(quiet=args.quiet)
     backend = resolve_laya_backend(args.laya_backend)
@@ -182,7 +190,7 @@ def main() -> None:
         run_text_input(worker, terminal)
     else:
         assert vosk_path is not None
-        run_microphone(vosk_path, worker, terminal, args.device)
+        run_microphone(vosk_path, worker, terminal, args.device, args.mic_gain)
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ def test_service_runner_builds_configured_arguments(tmp_path: Path) -> None:
                 'HOME_ASSISTANT_URL="http://ha.example:8123"',
                 'HOME_ASSISTANT_TOKEN_FILE="/tmp/token"',
                 'ALFRED_DEVICE="USB Audio"',
+                'ALFRED_MIC_GAIN="2.5"',
                 'ALFRED_REQUIRE_ALFRED="true"',
                 'ALFRED_QUIET="true"',
                 'ALFRED_EXECUTE_HOME_ASSISTANT="true"',
@@ -51,6 +52,7 @@ def test_service_runner_builds_configured_arguments(tmp_path: Path) -> None:
     arguments = shlex.split(completed.stdout)
 
     assert arguments[arguments.index("--device") + 1] == "USB Audio"
+    assert arguments[arguments.index("--mic-gain") + 1] == "2.5"
     assert arguments[arguments.index("--home-assistant-url") + 1] == (
         "http://ha.example:8123"
     )

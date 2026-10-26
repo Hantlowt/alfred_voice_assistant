@@ -47,6 +47,7 @@ fi
 [[ -n "${HOME_ASSISTANT_URL:-}" ]] && ARGS+=(--home-assistant-url "$HOME_ASSISTANT_URL")
 [[ -n "${HOME_ASSISTANT_TOKEN_FILE:-}" ]] && ARGS+=(--ha-token-file "$HOME_ASSISTANT_TOKEN_FILE")
 [[ -n "${ALFRED_DEVICE:-}" ]] && ARGS+=(--device "$ALFRED_DEVICE")
+[[ -n "${ALFRED_MIC_GAIN:-}" ]] && ARGS+=(--mic-gain "$ALFRED_MIC_GAIN")
 [[ -n "${ALFRED_MODELS_DIR:-}" ]] && ARGS+=(--models-dir "$ALFRED_MODELS_DIR")
 [[ -n "${ALFRED_THRESHOLD:-}" ]] && ARGS+=(--threshold "$ALFRED_THRESHOLD")
 

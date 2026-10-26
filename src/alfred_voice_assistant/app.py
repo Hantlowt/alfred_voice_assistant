@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from .home_assistant import ActionExecutor, SimulationExecutor
 from .intent import ACTION_BY_PARTS, IntentEngine
 
@@ -377,6 +379,7 @@ def run_microphone(
     worker: IntentWorker,
     terminal: Terminal,
     device: int | str | None = None,
+    mic_gain: float = 1.0,
 ) -> None:
     import sounddevice as sd
     from vosk import KaldiRecognizer, Model, SetLogLevel
@@ -399,6 +402,7 @@ def run_microphone(
             dropped_blocks += 1
 
     terminal.line(f"Microphone : {device_info['name']} · {sample_rate} Hz")
+    terminal.line(f"Gain microphone logiciel : {mic_gain:g}×")
     terminal.line("Écoute continue — Ctrl+C pour quitter.")
     last_partial = ""
     worker.start()
@@ -413,6 +417,11 @@ def run_microphone(
         ):
             while True:
                 chunk = audio.get()
+                if mic_gain != 1.0:
+                    samples = np.frombuffer(chunk, dtype=np.int16)
+                    chunk = np.clip(samples.astype(np.float32) * mic_gain, -32768, 32767).astype(
+                        np.int16
+                    ).tobytes()
                 if dropped_blocks:
                     terminal.line(f"⚠ {dropped_blocks} bloc(s) audio perdu(s).")
                     dropped_blocks = 0

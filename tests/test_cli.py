@@ -15,3 +15,8 @@ def test_text_mode_has_a_short_alias() -> None:
 def test_quiet_mode_has_a_short_alias() -> None:
     assert build_parser().parse_args(["--quiet"]).quiet
     assert build_parser().parse_args(["-q"]).quiet
+
+
+def test_microphone_gain_is_neutral_by_default_and_configurable() -> None:
+    assert build_parser().parse_args([]).mic_gain == 1.0
+    assert build_parser().parse_args(["--mic-gain", "2.5"]).mic_gain == 2.5

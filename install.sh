@@ -81,6 +81,7 @@ if [[ ! -f "$SERVICE_CONFIG" ]]; then
         printf 'HOME_ASSISTANT_URL=%q\n' "$HA_URL_INPUT"
         printf 'HOME_ASSISTANT_TOKEN_FILE=%q\n' "$TOKEN_FILE"
         printf 'ALFRED_DEVICE=%q\n' "$ALFRED_DEVICE_INPUT"
+        printf '%s\n' 'ALFRED_MIC_GAIN=1.0'
         printf 'ALFRED_MODELS_DIR=%q\n' "$HOME/.cache/alfred-voice-assistant"
         printf '%s\n' 'ALFRED_REQUIRE_ALFRED=true'
         printf '%s\n' 'ALFRED_QUIET=true'
