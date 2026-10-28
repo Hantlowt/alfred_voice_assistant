@@ -127,6 +127,11 @@ class Terminal:
             if self._interactive and self._partial:
                 print(f"… {self._partial}", end="", flush=True)
 
+    def warning(self, text: str) -> None:
+        """Conserve les incidents utiles dans les logs, même en mode silencieux."""
+        with self._lock:
+            print(text, file=sys.stderr, flush=True)
+
 
 class RecentTranscripts:
     def __init__(self, ttl_seconds: float) -> None:
@@ -380,66 +385,88 @@ def run_microphone(
     terminal: Terminal,
     device: int | str | None = None,
     mic_gain: float = 1.0,
+    *,
+    audio_watchdog_timeout: float = 5.0,
+    audio_retry_delay: float = 2.0,
 ) -> None:
     import sounddevice as sd
     from vosk import KaldiRecognizer, Model, SetLogLevel
 
     SetLogLevel(-1)
-    device_info: Any = sd.query_devices(device, "input")
-    sample_rate = int(device_info["default_samplerate"])
-    recognizer = KaldiRecognizer(Model(str(vosk_model_path)), sample_rate)
-    audio: queue.Queue[bytes] = queue.Queue(maxsize=64)
-    dropped_blocks = 0
-
-    def callback(indata: Any, frames: int, callback_time: Any, status: Any) -> None:
-        del frames, callback_time
-        nonlocal dropped_blocks
-        if status:
-            dropped_blocks += 1
-        try:
-            audio.put_nowait(bytes(indata))
-        except queue.Full:
-            dropped_blocks += 1
-
-    terminal.line(f"Microphone : {device_info['name']} · {sample_rate} Hz")
-    terminal.line(f"Gain microphone logiciel : {mic_gain:g}×")
-    terminal.line("Écoute continue — Ctrl+C pour quitter.")
-    last_partial = ""
+    vosk_model = Model(str(vosk_model_path))
     worker.start()
     try:
-        with sd.RawInputStream(
-            samplerate=sample_rate,
-            blocksize=4000,
-            device=device,
-            dtype="int16",
-            channels=1,
-            callback=callback,
-        ):
-            while True:
-                chunk = audio.get()
-                if mic_gain != 1.0:
-                    samples = np.frombuffer(chunk, dtype=np.int16)
-                    chunk = np.clip(samples.astype(np.float32) * mic_gain, -32768, 32767).astype(
-                        np.int16
-                    ).tobytes()
-                if dropped_blocks:
-                    terminal.line(f"⚠ {dropped_blocks} bloc(s) audio perdu(s).")
-                    dropped_blocks = 0
-                if recognizer.AcceptWaveform(chunk):
-                    text = str(json.loads(recognizer.Result()).get("text", "")).strip()
-                    terminal.clear_partial()
-                    last_partial = ""
-                    if text:
-                        terminal.line(f"🗣  Transcription : {text}")
-                        worker.submit(text)
-                else:
-                    partial = str(json.loads(recognizer.PartialResult()).get("partial", "")).strip()
-                    if partial != last_partial:
-                        terminal.partial(partial)
-                        last_partial = partial
-    except KeyboardInterrupt:
-        terminal.clear_partial()
-        terminal.line("Arrêt demandé.")
+        while True:
+            try:
+                device_info: Any = sd.query_devices(device, "input")
+                sample_rate = int(device_info["default_samplerate"])
+                recognizer = KaldiRecognizer(vosk_model, sample_rate)
+                audio: queue.Queue[bytes] = queue.Queue(maxsize=64)
+                dropped_blocks = 0
+
+                def callback(indata: Any, frames: int, callback_time: Any, status: Any) -> None:
+                    del frames, callback_time
+                    nonlocal dropped_blocks
+                    if status:
+                        dropped_blocks += 1
+                    try:
+                        audio.put_nowait(bytes(indata))
+                    except queue.Full:
+                        dropped_blocks += 1
+
+                terminal.line(f"Microphone : {device_info['name']} · {sample_rate} Hz")
+                terminal.line(f"Gain microphone logiciel : {mic_gain:g}×")
+                terminal.line("Écoute continue — Ctrl+C pour quitter.")
+                last_partial = ""
+                with sd.RawInputStream(
+                    samplerate=sample_rate,
+                    blocksize=4000,
+                    device=device,
+                    dtype="int16",
+                    channels=1,
+                    latency="high",
+                    callback=callback,
+                ):
+                    while True:
+                        try:
+                            chunk = audio.get(timeout=audio_watchdog_timeout)
+                        except queue.Empty as error:
+                            raise TimeoutError(
+                                f"aucun bloc audio depuis {audio_watchdog_timeout:g} s"
+                            ) from error
+                        if mic_gain != 1.0:
+                            samples = np.frombuffer(chunk, dtype=np.int16)
+                            chunk = np.clip(
+                                samples.astype(np.float32) * mic_gain, -32768, 32767
+                            ).astype(np.int16).tobytes()
+                        if dropped_blocks:
+                            terminal.line(f"⚠ {dropped_blocks} bloc(s) audio perdu(s).")
+                            dropped_blocks = 0
+                        if recognizer.AcceptWaveform(chunk):
+                            text = str(json.loads(recognizer.Result()).get("text", "")).strip()
+                            terminal.clear_partial()
+                            last_partial = ""
+                            if text:
+                                terminal.line(f"🗣  Transcription : {text}")
+                                worker.submit(text)
+                        else:
+                            partial = str(
+                                json.loads(recognizer.PartialResult()).get("partial", "")
+                            ).strip()
+                            if partial != last_partial:
+                                terminal.partial(partial)
+                                last_partial = partial
+            except KeyboardInterrupt:
+                terminal.clear_partial()
+                terminal.line("Arrêt demandé.")
+                break
+            except (sd.PortAudioError, TimeoutError, ValueError) as error:
+                terminal.clear_partial()
+                terminal.warning(
+                    f"⚠ Capture audio interrompue ({error}). Nouvelle tentative dans "
+                    f"{audio_retry_delay:g} s."
+                )
+                time.sleep(audio_retry_delay)
     finally:
         worker.close()
 

@@ -87,6 +87,11 @@ la commande d'installation avec `sudo` : le script ne l'utilise que pour enregis
 En mode silencieux, le journal reste vide pendant le fonctionnement normal ; les erreurs fatales y
 restent disponibles.
 
+La capture possède aussi son propre watchdog. Si ALSA/PortAudio cesse de fournir des blocs audio
+pendant 5 secondes (par exemple après un `xrun` ou une brève déconnexion USB), Alfred ferme puis
+rouvre le microphone toutes les 2 secondes. Les modèles Vosk et Laya restent chargés : la reprise
+ne provoque donc pas un redémarrage complet du service.
+
 ## Lancement
 
 Depuis la racine du dépôt :

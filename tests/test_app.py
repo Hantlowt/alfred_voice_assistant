@@ -1,9 +1,14 @@
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
 from alfred_voice_assistant.app import (
     AlfredGate,
     RecentTranscripts,
     Terminal,
     deterministic_action,
     normalize_asr_transcript,
+    run_microphone,
     safety_override_reason,
     transcript_for_intent,
 )
@@ -122,3 +127,70 @@ def test_quiet_terminal_emits_nothing(capsys) -> None:
     terminal.clear_partial()
 
     assert capsys.readouterr().out == ""
+
+
+def test_microphone_watchdog_reopens_stream_without_reloading_model(monkeypatch, capsys) -> None:
+    state = {"model_loads": 0, "streams": 0}
+
+    class FakeModel:
+        def __init__(self, path: str) -> None:
+            del path
+            state["model_loads"] += 1
+
+    class FakeRecognizer:
+        def __init__(self, model: FakeModel, sample_rate: int) -> None:
+            del model, sample_rate
+
+    class FakeStream:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+            state["streams"] += 1
+
+        def __enter__(self):
+            if state["streams"] == 2:
+                raise KeyboardInterrupt
+            return self
+
+        def __exit__(self, *args) -> None:
+            del args
+
+    class FakeWorker:
+        def __init__(self) -> None:
+            self.started = False
+            self.closed = False
+
+        def start(self) -> None:
+            self.started = True
+
+        def close(self) -> None:
+            self.closed = True
+
+    fake_sounddevice = SimpleNamespace(
+        PortAudioError=type("PortAudioError", (Exception,), {}),
+        RawInputStream=FakeStream,
+        query_devices=lambda device, kind: {
+            "name": "micro test",
+            "default_samplerate": 16_000,
+        },
+    )
+    fake_vosk = SimpleNamespace(
+        KaldiRecognizer=FakeRecognizer,
+        Model=FakeModel,
+        SetLogLevel=lambda level: None,
+    )
+    monkeypatch.setitem(sys.modules, "sounddevice", fake_sounddevice)
+    monkeypatch.setitem(sys.modules, "vosk", fake_vosk)
+    worker = FakeWorker()
+
+    run_microphone(
+        Path("modele-vosk"),
+        worker,  # type: ignore[arg-type]
+        Terminal(quiet=True),
+        audio_watchdog_timeout=0.001,
+        audio_retry_delay=0,
+    )
+
+    assert state == {"model_loads": 1, "streams": 2}
+    assert worker.started
+    assert worker.closed
+    assert "Capture audio interrompue" in capsys.readouterr().err
