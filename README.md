@@ -211,9 +211,13 @@ fournie avec `HOME_ASSISTANT_URL`, et le fichier avec `HOME_ASSISTANT_TOKEN_FILE
 
 ## Comportement
 
-Kyutai segmente les prises de parole puis les transcrit dans un worker séparé afin de ne pas bloquer
-la capture audio. Avec `--no-kyutai-stt`, Vosk affiche aussi ses transcriptions partielles sur une
-ligne temporaire. Avec `--text-mode` (ou `--text`), aucune capture audio ni aucun modèle STT n'est chargé : chaque ligne validée par Entrée
+Kyutai reçoit désormais les blocs audio en continu et produit ses tokens pendant que la personne
+parle, au lieu de recommencer l'inférence après chaque phrase. Après environ 320 ms de silence local,
+Alfred applique le « flush trick » décrit par Kyutai : il injecte immédiatement le silence nécessaire
+pour vider les 500 ms de décalage du modèle, sans les attendre en temps réel. Le texte partiel reste
+visible et la transcription finale est aussitôt transmise au contrôle Alfred puis à Laya. Avec
+`--no-kyutai-stt`, Vosk affiche aussi ses transcriptions partielles sur une ligne temporaire. Avec
+`--text-mode` (ou `--text`), aucune capture audio ni aucun modèle STT n'est chargé : chaque ligne validée par Entrée
 est envoyée au même pipeline que les phrases vocales. Chaque phrase finalisée est
 placée dans une file non bloquante et traitée par un worker Laya distinct, afin que l'inférence ne
 bloque jamais le callback audio. Le terminal affiche ensuite :
@@ -331,7 +335,8 @@ uv run pytest
 uv run ruff check .
 ```
 
-Références API : [Kyutai STT](https://huggingface.co/kyutai/stt-1b-en_fr),
+Références API : [fonctionnement temps réel de Kyutai STT](https://kyutai.org/stt/),
+[checkpoint Kyutai STT](https://huggingface.co/kyutai/stt-1b-en_fr),
 [implémentation officielle Kyutai](https://github.com/kyutai-labs/delayed-streams-modeling),
 [exemple microphone officiel Vosk](https://github.com/alphacep/vosk-api/blob/master/python/example/test_microphone.py),
 [modèle français Vosk](https://alphacephei.com/vosk/models),

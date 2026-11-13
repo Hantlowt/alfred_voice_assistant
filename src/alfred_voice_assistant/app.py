@@ -10,7 +10,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -18,8 +18,16 @@ from .home_assistant import ActionExecutor, SimulationExecutor
 from .intent import ACTION_BY_PARTS, IntentEngine
 
 
+@dataclass(frozen=True, slots=True)
+class KyutaiAudioEvent:
+    pcm: bytes
+    sample_rate: int
+    start_of_utterance: bool = False
+    end_of_utterance: bool = False
+
+
 class KyutaiTranscriber:
-    """Modèle Kyutai chargé une fois, avec un état de streaming neuf par phrase."""
+    """Modèle Kyutai chargé une fois et alimenté en continu par blocs audio."""
 
     def __init__(self, model_path: Path) -> None:
         import torch
@@ -45,7 +53,7 @@ class KyutaiTranscriber:
     def device(self) -> str:
         return self._device
 
-    def transcribe(self, pcm: bytes, sample_rate: int) -> str:
+    def _audio_tensor(self, pcm: bytes, sample_rate: int):
         torch = self._torch
         samples = np.frombuffer(pcm, dtype=np.int16).copy()
         audio = torch.from_numpy(samples).to(self._device, dtype=torch.float32)
@@ -58,17 +66,24 @@ class KyutaiTranscriber:
                 mode="linear",
                 align_corners=False,
             )
+        return audio
 
-        stt_config = self._checkpoint.stt_config
-        pad_left = int(stt_config.get("audio_silence_prefix_seconds", 0.0) * self.sample_rate)
-        pad_right = int(
-            (stt_config.get("audio_delay_seconds", 0.0) + 1.0) * self.sample_rate
-        )
-        audio = torch.nn.functional.pad(audio, (pad_left, pad_right))
+    def run_stream(
+        self,
+        events: queue.Queue[KyutaiAudioEvent | None],
+        on_partial: Callable[[str], None],
+        on_final: Callable[[str], None],
+    ) -> None:
+        """Consomme l'audio en temps réel et vide le délai du modèle à chaque fin de tour."""
+        torch = self._torch
         frame_size = int(self._mimi.sample_rate / self._mimi.frame_rate)
-        remainder = audio.shape[-1] % frame_size
-        if remainder:
-            audio = torch.nn.functional.pad(audio, (0, frame_size - remainder))
+        audio_delay = float(self._checkpoint.stt_config.get("audio_delay_seconds", 0.5))
+        flush_frames = max(1, round((audio_delay + 0.1) * self._mimi.frame_rate))
+        silence_frame = torch.zeros(
+            (1, 1, frame_size),
+            dtype=torch.float32,
+            device=self._device,
+        )
 
         generator = self._models.LMGen(
             self._lm,
@@ -78,19 +93,49 @@ class KyutaiTranscriber:
         )
         pieces: list[str] = []
         first_frame = True
+
+        def process_frame(frame) -> None:
+            nonlocal first_frame
+            codes = self._mimi.encode(frame)
+            if first_frame:
+                generator.step(codes)
+                first_frame = False
+            tokens = generator.step(codes)
+            if tokens is None:
+                return
+            token_id = int(tokens[0, 0, 0].item())
+            if token_id not in (0, 3, self._tokenizer.eos_id()):
+                pieces.append(self._tokenizer.id_to_piece(token_id).replace("▁", " "))
+                on_partial("".join(pieces).strip())
+
         with torch.no_grad(), self._mimi.streaming(1), generator.streaming(1):
-            for chunk in audio.split(frame_size, dim=2):
-                codes = self._mimi.encode(chunk)
-                if first_frame:
-                    generator.step(codes)
-                    first_frame = False
-                tokens = generator.step(codes)
-                if tokens is None:
-                    continue
-                token_id = int(tokens[0, 0, 0].item())
-                if token_id not in (0, 3, self._tokenizer.eos_id()):
-                    pieces.append(self._tokenizer.id_to_piece(token_id).replace("▁", " "))
-        return "".join(pieces).strip()
+            while True:
+                event = events.get()
+                try:
+                    if event is None:
+                        return
+                    if event.start_of_utterance:
+                        pieces.clear()
+                        on_partial("")
+                    if event.pcm:
+                        audio = self._audio_tensor(event.pcm, event.sample_rate)
+                        remainder = audio.shape[-1] % frame_size
+                        if remainder:
+                            audio = torch.nn.functional.pad(audio, (0, frame_size - remainder))
+                        for frame in audio.split(frame_size, dim=2):
+                            process_frame(frame)
+                    if event.end_of_utterance:
+                        # « Flush trick » Kyutai : les 500 ms de retard sont calculées
+                        # immédiatement au lieu d'être attendues en temps réel.
+                        for _ in range(flush_frames):
+                            process_frame(silence_frame)
+                        transcript = "".join(pieces).strip()
+                        pieces.clear()
+                        on_partial("")
+                        if transcript:
+                            on_final(transcript)
+                finally:
+                    events.task_done()
 
 _SPACE_OR_PUNCTUATION = re.compile(r"[^\wÀ-ÿ]+", re.UNICODE)
 _NEGATION = re.compile(
@@ -461,38 +506,39 @@ def run_kyutai_microphone(
     device: int | str | None = None,
     mic_gain: float = 1.0,
     *,
-    silence_seconds: float = 0.8,
+    silence_seconds: float = 0.32,
     speech_rms_threshold: float = 0.012,
     max_utterance_seconds: float = 15.0,
     audio_watchdog_timeout: float = 5.0,
     audio_retry_delay: float = 2.0,
 ) -> None:
-    """Capture des phrases, puis les transcrit avec Kyutai hors du callback audio."""
+    """Alimente Kyutai en continu et finalise rapidement chaque tour de parole."""
     import sounddevice as sd
 
     terminal.line("Chargement de Kyutai STT…")
     transcriber = KyutaiTranscriber(model_path)
     terminal.line(f"Kyutai STT chargé sur {transcriber.device}.")
-    utterances: queue.Queue[tuple[bytes, int] | None] = queue.Queue(maxsize=4)
+    events: queue.Queue[KyutaiAudioEvent | None] = queue.Queue(maxsize=512)
 
-    def transcribe_utterances() -> None:
-        while True:
-            item = utterances.get()
-            try:
-                if item is None:
-                    return
-                pcm, sample_rate = item
-                text = transcriber.transcribe(pcm, sample_rate)
-                if text:
-                    terminal.line(f"🗣  Transcription : {text}")
-                    worker.submit(text)
-            except Exception as error:
-                terminal.warning(f"⚠ Échec de transcription Kyutai ({error}).")
-            finally:
-                utterances.task_done()
+    def partial(text: str) -> None:
+        if text:
+            terminal.partial(text)
+        else:
+            terminal.clear_partial()
+
+    def final(text: str) -> None:
+        terminal.clear_partial()
+        terminal.line(f"🗣  Transcription : {text}")
+        worker.submit(text)
+
+    def transcribe_stream() -> None:
+        try:
+            transcriber.run_stream(events, partial, final)
+        except Exception as error:
+            terminal.warning(f"⚠ Échec du streaming Kyutai ({error}).")
 
     transcription_thread = threading.Thread(
-        target=transcribe_utterances,
+        target=transcribe_stream,
         name="kyutai-transcriber",
         daemon=True,
     )
@@ -519,10 +565,8 @@ def run_kyutai_microphone(
 
                 terminal.line(f"Microphone : {device_info['name']} · {sample_rate} Hz")
                 terminal.line(f"Gain microphone logiciel : {mic_gain:g}×")
-                terminal.line("Écoute continue avec Kyutai STT — Ctrl+C pour quitter.")
-                pre_roll: list[bytes] = []
-                pre_roll_blocks = max(1, int(0.32 * sample_rate / blocksize))
-                phrase: list[bytes] = []
+                terminal.line("Streaming Kyutai STT continu — Ctrl+C pour quitter.")
+                speaking = False
                 phrase_seconds = 0.0
                 silent_seconds = 0.0
                 with sd.RawInputStream(
@@ -553,34 +597,56 @@ def run_kyutai_microphone(
                         samples = np.frombuffer(chunk, dtype=np.int16).astype(np.float32)
                         rms = float(np.sqrt(np.mean(np.square(samples))) / 32768.0)
                         duration = len(samples) / sample_rate
-                        if not phrase:
-                            pre_roll.append(chunk)
-                            del pre_roll[:-pre_roll_blocks]
-                            if rms >= speech_rms_threshold:
-                                phrase = list(pre_roll)
-                                phrase_seconds = len(phrase) * duration
-                                silent_seconds = 0.0
-                        else:
-                            phrase.append(chunk)
-                            phrase_seconds += duration
-                            silent_seconds = (
-                                0.0 if rms >= speech_rms_threshold else silent_seconds + duration
+                        starts_now = not speaking and rms >= speech_rms_threshold
+                        if starts_now:
+                            speaking = True
+                            phrase_seconds = 0.0
+                            silent_seconds = 0.0
+
+                        try:
+                            events.put_nowait(
+                                KyutaiAudioEvent(
+                                    chunk,
+                                    sample_rate,
+                                    start_of_utterance=starts_now,
+                                )
                             )
-                            if (
+                        except queue.Full:
+                            terminal.warning(
+                                "⚠ File de streaming Kyutai pleine : bloc audio ignoré."
+                            )
+
+                        if speaking:
+                            phrase_seconds += duration
+                            if rms >= speech_rms_threshold:
+                                silent_seconds = 0.0
+                            else:
+                                silent_seconds += duration
+                            reached_end = (
                                 silent_seconds >= silence_seconds
                                 or phrase_seconds >= max_utterance_seconds
-                            ):
+                            )
+                            if reached_end:
+                                # Le marqueur est placé après l'audio déjà envoyé. Le thread
+                                # d'inférence calcule alors le retard de 500 ms sans l'attendre.
                                 try:
-                                    utterances.put_nowait((b"".join(phrase), sample_rate))
+                                    events.put(
+                                        KyutaiAudioEvent(
+                                            b"",
+                                            sample_rate,
+                                            end_of_utterance=True,
+                                        ),
+                                        timeout=1.0,
+                                    )
                                 except queue.Full:
                                     terminal.warning(
-                                        "⚠ File Kyutai pleine : une phrase a été ignorée."
+                                        "⚠ File Kyutai saturée : fin de phrase retardée."
                                     )
-                                phrase = []
-                                pre_roll = []
+                                speaking = False
                                 phrase_seconds = 0.0
                                 silent_seconds = 0.0
             except KeyboardInterrupt:
+                terminal.clear_partial()
                 terminal.line("Arrêt demandé.")
                 break
             except (sd.PortAudioError, TimeoutError, ValueError) as error:
@@ -591,7 +657,7 @@ def run_kyutai_microphone(
                 time.sleep(audio_retry_delay)
     finally:
         try:
-            utterances.put_nowait(None)
+            events.put_nowait(None)
         except queue.Full:
             pass
         worker.close()

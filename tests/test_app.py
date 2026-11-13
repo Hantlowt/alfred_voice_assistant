@@ -1,9 +1,13 @@
 import sys
+from contextlib import nullcontext
 from pathlib import Path
+from queue import Queue
 from types import SimpleNamespace
 
 from alfred_voice_assistant.app import (
     AlfredGate,
+    KyutaiAudioEvent,
+    KyutaiTranscriber,
     RecentTranscripts,
     Terminal,
     deterministic_action,
@@ -21,6 +25,77 @@ def test_recent_transcripts_normalizes_and_expires() -> None:
     assert recent.add_if_new("Allume la lumière !", now=10)
     assert not recent.add_if_new("  ALLUME la lumière... ", now=11)
     assert recent.add_if_new("Allume la lumière !", now=14)
+
+
+def test_kyutai_stream_flushes_delayed_tokens_at_end_of_utterance() -> None:
+    class FakeAudio:
+        shape = (1, 1, 1920)
+
+        def split(self, size: int, dim: int):
+            assert size == 1920
+            assert dim == 2
+            return (self,)
+
+    class FakeToken:
+        def __init__(self, token_id: int) -> None:
+            self.token_id = token_id
+
+        def __getitem__(self, key):
+            del key
+            return self
+
+        def item(self) -> int:
+            return self.token_id
+
+    class FakeGenerator:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def streaming(self, batch_size: int):
+            assert batch_size == 1
+            return nullcontext()
+
+        def step(self, codes):
+            del codes
+            self.calls += 1
+            token_id = {2: 10, 3: 11}.get(self.calls, 0)
+            return FakeToken(token_id)
+
+    generator = FakeGenerator()
+    transcriber = object.__new__(KyutaiTranscriber)
+    transcriber._torch = SimpleNamespace(
+        no_grad=nullcontext,
+        zeros=lambda *args, **kwargs: FakeAudio(),
+        float32="float32",
+        nn=SimpleNamespace(functional=SimpleNamespace(pad=lambda audio, padding: audio)),
+    )
+    transcriber._device = "cpu"
+    transcriber._checkpoint = SimpleNamespace(stt_config={"audio_delay_seconds": 0.5})
+    transcriber._mimi = SimpleNamespace(
+        sample_rate=24_000,
+        frame_rate=12.5,
+        encode=lambda frame: frame,
+        streaming=lambda batch_size: nullcontext(),
+    )
+    transcriber._tokenizer = SimpleNamespace(
+        eos_id=lambda: 2,
+        id_to_piece=lambda token_id: {10: "▁Alfred", 11: "▁allume"}[token_id],
+    )
+    transcriber._lm = object()
+    transcriber._models = SimpleNamespace(LMGen=lambda *args, **kwargs: generator)
+    transcriber._audio_tensor = lambda pcm, sample_rate: FakeAudio()
+    events: Queue[KyutaiAudioEvent | None] = Queue()
+    events.put(KyutaiAudioEvent(b"audio", 24_000, start_of_utterance=True))
+    events.put(KyutaiAudioEvent(b"", 24_000, end_of_utterance=True))
+    events.put(None)
+    partials: list[str] = []
+    finals: list[str] = []
+
+    transcriber.run_stream(events, partials.append, finals.append)
+
+    assert finals == ["Alfred allume"]
+    assert "Alfred" in partials
+    assert generator.calls == 10  # 2 appels initiaux + 8 frames de flush accéléré.
 
 
 def test_simulate_action_never_runs_a_real_action() -> None:
