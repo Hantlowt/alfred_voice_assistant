@@ -25,6 +25,12 @@ ARGS=(
     --duplicate-window "${ALFRED_DUPLICATE_WINDOW:-3}"
 )
 
+if is_true "${ALFRED_KYUTAI_STT:-true}"; then
+    ARGS+=(--kyutai-stt)
+else
+    ARGS+=(--no-kyutai-stt)
+fi
+
 if is_true "${ALFRED_REQUIRE_ALFRED:-true}"; then
     ARGS+=(--require-alfred)
 else

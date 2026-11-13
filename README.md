@@ -1,6 +1,6 @@
 # Alfred Voice Assistant — prototype local
 
-Prototype local sans wake word et sans entraînement : Vosk transcrit le microphone en continu, puis
+Prototype local sans wake word et sans entraînement : Kyutai STT transcrit le microphone par défaut, puis
 Laya classe chaque phrase finalisée dans une liste fermée d'actions. Une spécialisation légère créée
 avec Laya Studio est appliquée par défaut au mode `flat`, sans modifier ni recopier les poids du
 modèle. Le backend est MLX sur Mac Apple Silicon et PyTorch CPU sur Linux x86-64. Les actions sont
@@ -11,9 +11,10 @@ simulées par défaut ; leur exécution réelle via Home Assistant doit être ac
 - Mac Apple Silicon sous macOS 14+, ou Linux x86-64 (Lubuntu/Debian/Ubuntu) ;
 - Python 3.11 à 3.13 ;
 - [`uv`](https://docs.astral.sh/uv/getting-started/installation/) ;
-- accès Internet au **premier lancement seulement** (environ 41 Mo pour Vosk et 650 Mo pour Laya) ;
+- accès Internet à l'installation ou la mise à jour qui ajoute un modèle ;
 - accès au microphone et, pour l'exécution réelle, au serveur Home Assistant ;
-- sous Linux/PyTorch CPU : prévoir environ 8 Go de RAM et 10 Go de disque disponibles.
+- sous Linux/PyTorch CPU : prévoir au moins 8 Go de RAM et 13 Go de disque disponibles. Les poids
+  Kyutai représentent à eux seuls environ 2,4 Go et l'inférence sera nettement plus rapide avec CUDA.
 
 ## Installation automatique sur Lubuntu
 
@@ -36,7 +37,8 @@ alfred-update
 ```
 
 Cette commande effectue un `git pull --ff-only`, resynchronise exactement `uv.lock`, conserve le
-token et la configuration, recrée les lanceurs puis redémarre le service. Relancer la commande
+token et la configuration, télécharge les éventuels nouveaux modèles avant le redémarrage, recrée
+les lanceurs puis redémarre le service. Relancer la commande
 `curl` initiale produit le même résultat.
 
 Ensuite :
@@ -89,7 +91,7 @@ restent disponibles.
 
 La capture possède aussi son propre watchdog. Si ALSA/PortAudio cesse de fournir des blocs audio
 pendant 5 secondes (par exemple après un `xrun` ou une brève déconnexion USB), Alfred ferme puis
-rouvre le microphone toutes les 2 secondes. Les modèles Vosk et Laya restent chargés : la reprise
+rouvre le microphone toutes les 2 secondes. Les modèles de transcription et Laya restent chargés : la reprise
 ne provoque donc pas un redémarrage complet du service.
 
 ## Lancement
@@ -103,7 +105,7 @@ uv run alfred-local
 `uv` crée l'environnement et installe les dépendances déclarées dans `pyproject.toml`. Au premier
 démarrage, l'application télécharge automatiquement :
 
-- `vosk-model-small-fr-0.22` depuis le site officiel Vosk ;
+- `kyutai/stt-1b-en_fr` depuis Hugging Face (transcription par défaut) ;
 - `aac6fef/laya-multilingual-mlx` depuis Hugging Face.
 
 Sous Linux, le second modèle est remplacé automatiquement par le checkpoint multilingue PyTorch
@@ -122,6 +124,12 @@ uv run alfred-local --threshold 0.08 --duplicate-window 5
 
 # Debug sans microphone : saisir une phrase puis appuyer sur Entrée
 uv run alfred-local --text-mode
+
+# Revenir à l'ancien moteur Vosk
+uv run alfred-local --no-kyutai-stt
+
+# Précharger explicitement tous les modèles sans démarrer l'assistant
+uv run alfred-local --download-models
 
 # Déploiement silencieux : aucune transcription, probabilité ou confirmation normale
 uv run alfred-local --quiet --execute-home-assistant
@@ -166,8 +174,9 @@ uv run alfred-local --execute-home-assistant \
 uv run alfred-local --laya-backend auto
 ```
 
-La variable `ALFRED_MODELS_DIR` peut aussi définir l'emplacement des modèles. Les options de ligne
-de commande ont priorité.
+La variable `ALFRED_MODELS_DIR` peut aussi définir l'emplacement des modèles. Pour le service,
+`ALFRED_KYUTAI_STT=true` active Kyutai (valeur par défaut) et `false` restaure Vosk. Les options de
+ligne de commande ont priorité.
 
 ## Home Assistant
 
@@ -198,8 +207,9 @@ fournie avec `HOME_ASSISTANT_URL`, et le fichier avec `HOME_ASSISTANT_TOKEN_FILE
 
 ## Comportement
 
-Vosk affiche les transcriptions partielles sur une ligne temporaire. Avec `--text-mode` (ou
-`--text`), aucune capture audio ni aucun modèle Vosk n'est chargé : chaque ligne validée par Entrée
+Kyutai segmente les prises de parole puis les transcrit dans un worker séparé afin de ne pas bloquer
+la capture audio. Avec `--no-kyutai-stt`, Vosk affiche aussi ses transcriptions partielles sur une
+ligne temporaire. Avec `--text-mode` (ou `--text`), aucune capture audio ni aucun modèle STT n'est chargé : chaque ligne validée par Entrée
 est envoyée au même pipeline que les phrases vocales. Chaque phrase finalisée est
 placée dans une file non bloquante et traitée par un worker Laya distinct, afin que l'inférence ne
 bloque jamais le callback audio. Le terminal affiche ensuite :
@@ -313,7 +323,9 @@ uv run pytest
 uv run ruff check .
 ```
 
-Références API : [exemple microphone officiel Vosk](https://github.com/alphacep/vosk-api/blob/master/python/example/test_microphone.py),
+Références API : [Kyutai STT](https://huggingface.co/kyutai/stt-1b-en_fr),
+[implémentation officielle Kyutai](https://github.com/kyutai-labs/delayed-streams-modeling),
+[exemple microphone officiel Vosk](https://github.com/alphacep/vosk-api/blob/master/python/example/test_microphone.py),
 [modèle français Vosk](https://alphacephei.com/vosk/models),
 [API laya-mlx](https://github.com/mizorewww/laya-mlx) et
 [checkpoint multilingue](https://huggingface.co/aac6fef/laya-multilingual-mlx),

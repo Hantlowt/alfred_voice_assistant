@@ -23,6 +23,7 @@ def test_service_runner_builds_configured_arguments(tmp_path: Path) -> None:
                 'HOME_ASSISTANT_TOKEN_FILE="/tmp/token"',
                 'ALFRED_DEVICE="USB Audio"',
                 'ALFRED_MIC_GAIN="2.5"',
+                'ALFRED_KYUTAI_STT="false"',
                 'ALFRED_REQUIRE_ALFRED="true"',
                 'ALFRED_QUIET="true"',
                 'ALFRED_EXECUTE_HOME_ASSISTANT="true"',
@@ -53,6 +54,7 @@ def test_service_runner_builds_configured_arguments(tmp_path: Path) -> None:
 
     assert arguments[arguments.index("--device") + 1] == "USB Audio"
     assert arguments[arguments.index("--mic-gain") + 1] == "2.5"
+    assert "--no-kyutai-stt" in arguments
     assert arguments[arguments.index("--home-assistant-url") + 1] == (
         "http://ha.example:8123"
     )

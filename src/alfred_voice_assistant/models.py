@@ -18,6 +18,9 @@ LAYA_DIR_NAME = "laya-multilingual-mlx"
 LAYA_TORCH_REPO_ID = "convaiinnovations/laya-multilingual"
 LAYA_TORCH_REVISION = "1720e3e3357cfe1e281542e223f8273b0890ca34"
 LAYA_TORCH_DIR_NAME = "laya-multilingual-pytorch-v2"
+KYUTAI_STT_REPO_ID = "kyutai/stt-1b-en_fr"
+KYUTAI_STT_REVISION = "1c34c6b4f7e9299bb61985f145052ff131005dde"
+KYUTAI_STT_DIR_NAME = "kyutai-stt-1b-en_fr"
 
 
 def _valid_vosk_model(path: Path) -> bool:
@@ -30,6 +33,18 @@ def _valid_laya_model(path: Path) -> bool:
 
 def _valid_laya_torch_model(path: Path) -> bool:
     return (path / "rl_agent_config.json").is_file() and (path / "model.safetensors").is_file()
+
+
+def _valid_kyutai_stt_model(path: Path) -> bool:
+    return all(
+        (path / filename).is_file()
+        for filename in (
+            "config.json",
+            "mimi-pytorch-e351c8d8@125.safetensors",
+            "model.safetensors",
+            "tokenizer_en_fr_audio_8000.model",
+        )
+    )
 
 
 def resolve_laya_backend(requested: str = "auto") -> str:
@@ -139,6 +154,41 @@ def ensure_laya_torch_model(models_dir: Path) -> Path:
     return destination
 
 
-def ensure_models(models_dir: Path, backend: str = "auto") -> tuple[Path, Path]:
+def ensure_kyutai_stt_model(models_dir: Path) -> Path:
+    """Télécharge atomiquement le modèle de transcription français/anglais Kyutai."""
+    destination = models_dir / KYUTAI_STT_DIR_NAME
+    if _valid_kyutai_stt_model(destination):
+        return destination
+    if destination.exists():
+        raise RuntimeError(f"Modèle Kyutai STT incomplet : supprimez {destination} puis relancez.")
+
+    from huggingface_hub import snapshot_download
+
+    models_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Modèle Kyutai STT absent, téléchargement unique de {KYUTAI_STT_REPO_ID}…")
+    with tempfile.TemporaryDirectory(prefix="kyutai-stt-", dir=models_dir) as temp_name:
+        temp_dir = Path(temp_name) / "snapshot"
+        snapshot_download(
+            repo_id=KYUTAI_STT_REPO_ID,
+            revision=KYUTAI_STT_REVISION,
+            local_dir=temp_dir,
+        )
+        if not _valid_kyutai_stt_model(temp_dir):
+            raise RuntimeError("Le modèle Kyutai STT téléchargé est incomplet.")
+        shutil.move(str(temp_dir), destination)
+    return destination
+
+
+def ensure_models(
+    models_dir: Path,
+    backend: str = "auto",
+    *,
+    kyutai_stt: bool = True,
+) -> tuple[Path, Path]:
     """Prépare tous les poids avant de démarrer le microphone."""
-    return ensure_vosk_model(models_dir), ensure_laya_model(models_dir, backend)
+    asr_path = (
+        ensure_kyutai_stt_model(models_dir)
+        if kyutai_stt
+        else ensure_vosk_model(models_dir)
+    )
+    return asr_path, ensure_laya_model(models_dir, backend)

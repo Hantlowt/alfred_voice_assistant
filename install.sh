@@ -83,6 +83,7 @@ if [[ ! -f "$SERVICE_CONFIG" ]]; then
         printf 'ALFRED_DEVICE=%q\n' "$ALFRED_DEVICE_INPUT"
         printf '%s\n' 'ALFRED_MIC_GAIN=1.0'
         printf 'ALFRED_MODELS_DIR=%q\n' "$HOME/.cache/alfred-voice-assistant"
+        printf '%s\n' 'ALFRED_KYUTAI_STT=true'
         printf '%s\n' 'ALFRED_REQUIRE_ALFRED=true'
         printf '%s\n' 'ALFRED_QUIET=true'
         printf '%s\n' 'ALFRED_EXECUTE_HOME_ASSISTANT=true'
@@ -95,6 +96,17 @@ if [[ ! -f "$SERVICE_CONFIG" ]]; then
     chmod 600 "$SERVICE_CONFIG"
     unset HA_URL_INPUT ALFRED_DEVICE_INPUT
 fi
+
+# Prépare les poids avant le redémarrage du service. Une mise à jour ne dépend ainsi
+# pas du téléchargement Hugging Face pendant le lancement systemd.
+# shellcheck disable=SC1090
+source "$SERVICE_CONFIG"
+MODEL_ARGS=(--download-models --models-dir "${ALFRED_MODELS_DIR:-$HOME/.cache/alfred-voice-assistant}")
+case "${ALFRED_KYUTAI_STT:-true}" in
+    0|false|FALSE|no|NO|non|NON|off|OFF) MODEL_ARGS+=(--no-kyutai-stt) ;;
+    *) MODEL_ARGS+=(--kyutai-stt) ;;
+esac
+"$INSTALL_DIR/.venv/bin/alfred-local" "${MODEL_ARGS[@]}"
 
 for launcher in alfred-local alfred-update alfred-service; do
     if [[ -e "$BIN_DIR/$launcher" && ! -L "$BIN_DIR/$launcher" ]]; then

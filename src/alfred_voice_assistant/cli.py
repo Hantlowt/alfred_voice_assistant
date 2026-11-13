@@ -7,7 +7,7 @@ import contextlib
 import os
 from pathlib import Path
 
-from .app import IntentWorker, Terminal, run_microphone, run_text_input
+from .app import IntentWorker, Terminal, run_kyutai_microphone, run_microphone, run_text_input
 from .home_assistant import HomeAssistantExecutor, SimulationExecutor
 from .intent import LayaIntentEngine
 from .models import ensure_laya_model, ensure_models, resolve_laya_backend
@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
             Path.home() / ".config" / "alfred_voice_assistant" / "home_assistant_token",
         )
     )
-    parser = argparse.ArgumentParser(description="Assistant vocal local Vosk + Laya")
+    parser = argparse.ArgumentParser(description="Assistant vocal local Kyutai/Vosk + Laya")
     parser.add_argument(
         "--threshold",
         type=float,
@@ -49,9 +49,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--mic-gain",
         type=float,
         default=1.0,
-        help="gain logiciel appliqué avant Vosk (1.0 = aucun gain)",
+        help="gain logiciel appliqué avant transcription (1.0 = aucun gain)",
     )
     parser.add_argument("--models-dir", type=Path, default=default_models)
+    parser.add_argument(
+        "--kyutai-stt",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="utilise kyutai/stt-1b-en_fr pour transcrire (activé par défaut)",
+    )
+    parser.add_argument(
+        "--download-models",
+        action="store_true",
+        help="télécharge les modèles manquants puis quitte",
+    )
     parser.add_argument("--list-devices", action="store_true", help="liste les périphériques audio")
     parser.add_argument(
         "--text-mode",
@@ -125,6 +136,11 @@ def main() -> None:
 
     terminal = Terminal(quiet=args.quiet)
     backend = resolve_laya_backend(args.laya_backend)
+    models_dir = args.models_dir.expanduser().resolve()
+    if args.download_models:
+        ensure_models(models_dir, backend, kyutai_stt=args.kyutai_stt)
+        terminal.line("Tous les modèles sont disponibles localement.")
+        return
     use_specialization = args.specialization and args.intent_mode == "flat"
     specialization_path = None
     if use_specialization:
@@ -139,7 +155,10 @@ def main() -> None:
         "Mode Alfred obligatoire : " + ("ACTIVÉ" if args.require_alfred else "DÉSACTIVÉ")
     )
     terminal.line(f"Mode de décision Laya : {args.intent_mode}")
-    terminal.line("Entrée : " + ("TEXTE" if args.text_mode else "MICROPHONE"))
+    if args.text_mode:
+        terminal.line("Entrée : TEXTE")
+    else:
+        terminal.line("Transcription : " + ("KYUTAI STT" if args.kyutai_stt else "VOSK"))
     terminal.line(f"Backend Laya : {backend}")
     if specialization_path is not None:
         terminal.line(f"Spécialisation Laya Studio : {specialization_path}")
@@ -161,17 +180,20 @@ def main() -> None:
     else:
         executor = SimulationExecutor()
         terminal.line("Home Assistant : simulation (aucun appel réel)")
-    models_dir = args.models_dir.expanduser().resolve()
     with contextlib.ExitStack() as stack:
         if args.quiet:
             sink = stack.enter_context(open(os.devnull, "w", encoding="utf-8"))
             stack.enter_context(contextlib.redirect_stdout(sink))
             stack.enter_context(contextlib.redirect_stderr(sink))
         if args.text_mode:
-            vosk_path = None
+            asr_path = None
             laya_path = ensure_laya_model(models_dir, backend)
         else:
-            vosk_path, laya_path = ensure_models(models_dir, backend)
+            asr_path, laya_path = ensure_models(
+                models_dir,
+                backend,
+                kyutai_stt=args.kyutai_stt,
+            )
         engine = LayaIntentEngine(
             laya_path,
             mode=args.intent_mode,
@@ -189,8 +211,11 @@ def main() -> None:
     if args.text_mode:
         run_text_input(worker, terminal)
     else:
-        assert vosk_path is not None
-        run_microphone(vosk_path, worker, terminal, args.device, args.mic_gain)
+        assert asr_path is not None
+        if args.kyutai_stt:
+            run_kyutai_microphone(asr_path, worker, terminal, args.device, args.mic_gain)
+        else:
+            run_microphone(asr_path, worker, terminal, args.device, args.mic_gain)
 
 
 if __name__ == "__main__":

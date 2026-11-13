@@ -20,3 +20,8 @@ def test_quiet_mode_has_a_short_alias() -> None:
 def test_microphone_gain_is_neutral_by_default_and_configurable() -> None:
     assert build_parser().parse_args([]).mic_gain == 1.0
     assert build_parser().parse_args(["--mic-gain", "2.5"]).mic_gain == 2.5
+
+
+def test_kyutai_stt_is_enabled_by_default_and_can_be_disabled() -> None:
+    assert build_parser().parse_args([]).kyutai_stt is True
+    assert build_parser().parse_args(["--no-kyutai-stt"]).kyutai_stt is False
