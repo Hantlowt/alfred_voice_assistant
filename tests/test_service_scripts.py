@@ -14,6 +14,10 @@ def test_service_scripts_have_valid_bash_syntax() -> None:
     )
 
 
+def test_installer_includes_python_headers_for_torch_inductor() -> None:
+    assert "python3-dev" in (ROOT / "install.sh").read_text()
+
+
 def test_service_runner_builds_configured_arguments(tmp_path: Path) -> None:
     config = tmp_path / "service.env"
     config.write_text(

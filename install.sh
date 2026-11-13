@@ -19,7 +19,15 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     exit 1
 fi
 
-if [[ "$MODE" == "install" ]] && command -v apt-get >/dev/null 2>&1; then
+NEED_SYSTEM_PACKAGES=false
+if [[ "$MODE" == "install" ]]; then
+    NEED_SYSTEM_PACKAGES=true
+elif [[ -x "$INSTALL_DIR/.venv/bin/python" ]]; then
+    PYTHON_INCLUDE_DIR="$("$INSTALL_DIR/.venv/bin/python" -c 'import sysconfig; print(sysconfig.get_path("include"))')"
+    [[ -f "$PYTHON_INCLUDE_DIR/Python.h" ]] || NEED_SYSTEM_PACKAGES=true
+fi
+
+if [[ "$NEED_SYSTEM_PACKAGES" == "true" ]] && command -v apt-get >/dev/null 2>&1; then
     if [[ "$EUID" -eq 0 ]]; then
         APT=(apt-get)
     elif command -v sudo >/dev/null 2>&1; then
@@ -29,9 +37,10 @@ if [[ "$MODE" == "install" ]] && command -v apt-get >/dev/null 2>&1; then
         exit 1
     fi
     "${APT[@]}" update
-    "${APT[@]}" install -y ca-certificates curl git build-essential portaudio19-dev libasound2-dev
-elif [[ "$MODE" == "install" ]]; then
-    echo "apt-get est introuvable : installez Git, curl, PortAudio et ALSA manuellement." >&2
+    "${APT[@]}" install -y \
+        ca-certificates curl git build-essential python3-dev portaudio19-dev libasound2-dev
+elif [[ "$NEED_SYSTEM_PACKAGES" == "true" ]]; then
+    echo "apt-get est introuvable : installez Git, Python.h, PortAudio et ALSA manuellement." >&2
     exit 1
 fi
 
