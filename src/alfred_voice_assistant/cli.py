@@ -83,6 +83,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="exige « alfred » dans la phrase courante ou la précédente",
     )
     parser.add_argument(
+        "--remove-do-nothing-when-alfred",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="retire do_nothing des choix Laya quand --require-alfred est actif",
+    )
+    parser.add_argument(
         "--intent-mode",
         choices=("flat", "factorized"),
         default="flat",
@@ -154,6 +160,10 @@ def main() -> None:
     terminal.line(
         "Mode Alfred obligatoire : " + ("ACTIVÉ" if args.require_alfred else "DÉSACTIVÉ")
     )
+    remove_do_nothing = args.require_alfred and args.remove_do_nothing_when_alfred
+    terminal.line(
+        "Option Laya do_nothing : " + ("RETIRÉE" if remove_do_nothing else "CONSERVÉE")
+    )
     terminal.line(f"Mode de décision Laya : {args.intent_mode}")
     if args.text_mode:
         terminal.line("Entrée : TEXTE")
@@ -199,6 +209,7 @@ def main() -> None:
             mode=args.intent_mode,
             backend=backend,
             specialization_path=specialization_path,
+            remove_do_nothing=remove_do_nothing,
         )
     worker = IntentWorker(
         engine,

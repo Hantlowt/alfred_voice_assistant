@@ -41,3 +41,25 @@ def test_specialization_rejects_the_wrong_backend() -> None:
             expected_labels=ACTIONS,
             expected_base_model=manifest["base_model"],
         )
+
+
+def test_specialization_can_exclude_do_nothing() -> None:
+    path = bundled_specialization("mlx")
+    tensors = load_file(str(path / "vectors.safetensors"))
+    dimension = tensors["transform"].shape[0]
+    specialization = LatentSpecialization(
+        path,
+        backend="mlx",
+        expected_labels=ACTIONS,
+        expected_base_model=LAYA_REPO_ID,
+    )
+
+    result = specialization.predict(
+        "alfred allume les lumières",
+        lambda texts: np.ones((len(texts), dimension), dtype=np.float32),
+        excluded_labels=("do_nothing",),
+    )
+
+    assert result.choice != "do_nothing"
+    assert "do_nothing" not in result.probabilities
+    assert sum(result.probabilities.values()) == pytest.approx(1.0)

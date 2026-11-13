@@ -36,6 +36,11 @@ if is_true "${ALFRED_REQUIRE_ALFRED:-true}"; then
 else
     ARGS+=(--no-require-alfred)
 fi
+if is_true "${ALFRED_REMOVE_DO_NOTHING_WHEN_ALFRED:-true}"; then
+    ARGS+=(--remove-do-nothing-when-alfred)
+else
+    ARGS+=(--no-remove-do-nothing-when-alfred)
+fi
 if is_true "${ALFRED_QUIET:-true}"; then
     ARGS+=(--quiet)
 fi

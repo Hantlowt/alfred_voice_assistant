@@ -29,6 +29,7 @@ def test_service_runner_builds_configured_arguments(tmp_path: Path) -> None:
                 'ALFRED_MIC_GAIN="2.5"',
                 'ALFRED_KYUTAI_STT="false"',
                 'ALFRED_REQUIRE_ALFRED="true"',
+                'ALFRED_REMOVE_DO_NOTHING_WHEN_ALFRED="true"',
                 'ALFRED_QUIET="true"',
                 'ALFRED_EXECUTE_HOME_ASSISTANT="true"',
                 'ALFRED_SPECIALIZATION="true"',
@@ -63,6 +64,7 @@ def test_service_runner_builds_configured_arguments(tmp_path: Path) -> None:
         "http://ha.example:8123"
     )
     assert "--require-alfred" in arguments
+    assert "--remove-do-nothing-when-alfred" in arguments
     assert "--quiet" in arguments
     assert "--execute-home-assistant" in arguments
     assert arguments[arguments.index("--threshold") + 1] == "0.08"

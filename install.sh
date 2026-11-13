@@ -94,6 +94,7 @@ if [[ ! -f "$SERVICE_CONFIG" ]]; then
         printf 'ALFRED_MODELS_DIR=%q\n' "$HOME/.cache/alfred-voice-assistant"
         printf '%s\n' 'ALFRED_KYUTAI_STT=true'
         printf '%s\n' 'ALFRED_REQUIRE_ALFRED=true'
+        printf '%s\n' 'ALFRED_REMOVE_DO_NOTHING_WHEN_ALFRED=true'
         printf '%s\n' 'ALFRED_QUIET=true'
         printf '%s\n' 'ALFRED_EXECUTE_HOME_ASSISTANT=true'
         printf '%s\n' 'ALFRED_SPECIALIZATION=true'

@@ -140,6 +140,9 @@ uv run alfred-local --text --require-alfred --execute-home-assistant
 # Exiger « alfred » dans la phrase courante ou dans celle juste avant
 uv run alfred-local --require-alfred
 
+# Conserver malgré tout do_nothing parmi les choix proposés à Laya
+uv run alfred-local --require-alfred --no-remove-do-nothing-when-alfred
+
 # Désactiver explicitement cette exigence (c'est aussi la valeur par défaut)
 uv run alfred-local --no-require-alfred
 
@@ -175,8 +178,9 @@ uv run alfred-local --laya-backend auto
 ```
 
 La variable `ALFRED_MODELS_DIR` peut aussi définir l'emplacement des modèles. Pour le service,
-`ALFRED_KYUTAI_STT=true` active Kyutai (valeur par défaut) et `false` restaure Vosk. Les options de
-ligne de commande ont priorité.
+`ALFRED_KYUTAI_STT=true` active Kyutai et `ALFRED_REMOVE_DO_NOTHING_WHEN_ALFRED=true` retire
+`do_nothing` des choix Laya lorsque `ALFRED_REQUIRE_ALFRED=true` ; ces deux options sont activées par
+défaut. Les options de ligne de commande ont priorité.
 
 ## Home Assistant
 
@@ -223,6 +227,10 @@ Avec `--require-alfred`, une action n'est retenue que si la transcription ou le 
 mot exact `alfred` dans la phrase courante ou dans la phrase immédiatement précédente. Cela permet
 aussi de dire ou saisir « Alfred », puis la commande dans une seconde phrase. L'autorisation ne se
 propage pas à une troisième phrase. Chaque résultat indique clairement l'état de ce contrôle.
+Par défaut, ce mode retire également `do_nothing` de l'appel Laya afin que le modèle départage les
+14 actions disponibles après détection d'Alfred. Les garde-fous déterministes restent appliqués et
+peuvent toujours ramener le résultat final à `do_nothing` en cas de négation, de cible inconnue ou
+de commande non explicite. `--no-remove-do-nothing-when-alfred` rétablit l'ancien comportement.
 
 Les seules actions proposées à Laya sont :
 

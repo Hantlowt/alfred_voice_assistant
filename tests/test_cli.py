@@ -25,3 +25,14 @@ def test_microphone_gain_is_neutral_by_default_and_configurable() -> None:
 def test_kyutai_stt_is_enabled_by_default_and_can_be_disabled() -> None:
     assert build_parser().parse_args([]).kyutai_stt is True
     assert build_parser().parse_args(["--no-kyutai-stt"]).kyutai_stt is False
+
+
+def test_remove_do_nothing_when_alfred_is_enabled_by_default() -> None:
+    parser = build_parser()
+
+    assert parser.parse_args([]).remove_do_nothing_when_alfred is True
+    assert (
+        parser.parse_args(["--no-remove-do-nothing-when-alfred"])
+        .remove_do_nothing_when_alfred
+        is False
+    )

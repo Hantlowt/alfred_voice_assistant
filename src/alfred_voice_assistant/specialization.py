@@ -87,6 +87,8 @@ class LatentSpecialization:
         self,
         transcript: str,
         embed: Callable[[Sequence[str]], np.ndarray],
+        *,
+        excluded_labels: Sequence[str] = (),
     ) -> SpecializedPrediction:
         encoded = _normalize(np.asarray(embed([transcript]), dtype=np.float32))
         if encoded.shape != (1, self._transform.shape[0]):
@@ -96,13 +98,19 @@ class LatentSpecialization:
             )
         transformed = _normalize(encoded @ self._transform)
         logits = transformed @ self._prototypes.T
-        scaled = logits[0] / self._temperature
+        included_indices = [
+            index for index, label in enumerate(self.labels) if label not in excluded_labels
+        ]
+        if not included_indices:
+            raise RuntimeError("La spécialisation ne peut pas exclure toutes ses actions.")
+        included_labels = tuple(self.labels[index] for index in included_indices)
+        scaled = logits[0, included_indices] / self._temperature
         scaled -= scaled.max()
         probabilities_array = np.exp(scaled)
         probabilities_array /= probabilities_array.sum()
         probabilities = {
             label: float(probability)
-            for label, probability in zip(self.labels, probabilities_array, strict=True)
+            for label, probability in zip(included_labels, probabilities_array, strict=True)
         }
-        choice = self.labels[int(np.argmax(probabilities_array))]
+        choice = included_labels[int(np.argmax(probabilities_array))]
         return SpecializedPrediction(choice, probabilities)

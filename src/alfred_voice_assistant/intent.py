@@ -62,6 +62,22 @@ INTENT_QUESTION = {
     }
 }
 
+INTENT_QUESTION_WITHOUT_DO_NOTHING = {
+    "intent": {
+        "type": "choice",
+        "instructions": (
+            "Le contrôle du mot-clé Alfred est appliqué séparément. Choisis l'unique action "
+            "domotique demandée parmi les choix disponibles, sans inventer d'opération ni "
+            "d'équipement."
+        ),
+        "criteria": {
+            key: value
+            for key, value in INTENT_QUESTION["intent"]["criteria"].items()
+            if key != "do_nothing"
+        },
+    }
+}
+
 OPERATION_QUESTION = {
     "operation": {
         "type": "choice",
@@ -74,6 +90,21 @@ OPERATION_QUESTION = {
             "allumer": "ordre direct d'allumer, activer ou démarrer un équipement",
             "éteindre": "ordre direct d'éteindre, désactiver ou arrêter un équipement",
             "do_nothing": "aucun ordre direct et affirmatif d'allumer ou d'éteindre",
+        },
+    }
+}
+
+OPERATION_QUESTION_WITHOUT_DO_NOTHING = {
+    "operation": {
+        "type": "choice",
+        "instructions": (
+            "Le contrôle du mot-clé Alfred est appliqué séparément. Choisis si la commande "
+            "demande d'allumer ou d'éteindre l'équipement."
+        ),
+        "criteria": {
+            key: value
+            for key, value in OPERATION_QUESTION["operation"]["criteria"].items()
+            if key != "do_nothing"
         },
     }
 }
@@ -95,6 +126,21 @@ OBJECT_QUESTION = {
             "les leds": "les rubans ou éclairages LED",
             "la clim": "la climatisation",
             "do_nothing": "aucun équipement pris en charge n'est explicitement visé",
+        },
+    }
+}
+
+OBJECT_QUESTION_WITHOUT_DO_NOTHING = {
+    "objet": {
+        "type": "choice",
+        "instructions": (
+            "Le contrôle du mot-clé Alfred est appliqué séparément. Identifie l'équipement "
+            "explicitement visé parmi les choix disponibles."
+        ),
+        "criteria": {
+            key: value
+            for key, value in OBJECT_QUESTION["objet"]["criteria"].items()
+            if key != "do_nothing"
         },
     }
 }
@@ -147,6 +193,7 @@ class LayaIntentEngine:
         mode: str = "flat",
         backend: str = "mlx",
         specialization_path: Path | None = None,
+        remove_do_nothing: bool = False,
     ) -> None:
         if mode not in {"flat", "factorized"}:
             raise ValueError(f"Mode d'intention inconnu : {mode}")
@@ -165,6 +212,7 @@ class LayaIntentEngine:
         else:
             raise ValueError(f"Backend Laya inconnu : {backend}")
         self._mode = mode
+        self._remove_do_nothing = remove_do_nothing
         self._specialization = None
         self._embed = None
         if specialization_path is not None:
@@ -190,7 +238,11 @@ class LayaIntentEngine:
 
         if self._specialization is not None and self._embed is not None:
             started = perf_counter()
-            prediction = self._specialization.predict(transcript, self._embed)
+            prediction = self._specialization.predict(
+                transcript,
+                self._embed,
+                excluded_labels=("do_nothing",) if self._remove_do_nothing else (),
+            )
             latency_ms = (perf_counter() - started) * 1000
             return IntentResult(
                 intent=prediction.choice,
@@ -206,12 +258,18 @@ class LayaIntentEngine:
             )
 
         started = perf_counter()
-        response = self._agent.predict(transcript, INTENT_QUESTION)
+        question = (
+            INTENT_QUESTION_WITHOUT_DO_NOTHING
+            if self._remove_do_nothing
+            else INTENT_QUESTION
+        )
+        response = self._agent.predict(transcript, question)
         latency_ms = (perf_counter() - started) * 1000
         answer = response["answers"]["intent"]
         probabilities = {key: float(value) for key, value in answer["probabilities"].items()}
         intent = str(answer["choice"])
-        if intent not in ACTIONS or set(probabilities) != set(ACTIONS):
+        expected_actions = set(ACTIONS) - ({"do_nothing"} if self._remove_do_nothing else set())
+        if intent not in expected_actions or set(probabilities) != expected_actions:
             raise RuntimeError("Réponse Laya incompatible avec les actions configurées.")
         return IntentResult(
             intent=intent,
@@ -222,10 +280,20 @@ class LayaIntentEngine:
 
     def _predict_factorized(self, transcript: str) -> IntentResult:
         operation, operation_report = self._predict_one(
-            transcript, OPERATION_QUESTION, "operation", "opération"
+            transcript,
+            OPERATION_QUESTION_WITHOUT_DO_NOTHING
+            if self._remove_do_nothing
+            else OPERATION_QUESTION,
+            "operation",
+            "opération",
         )
         object_name, object_report = self._predict_one(
-            transcript, OBJECT_QUESTION, "objet", "objet"
+            transcript,
+            OBJECT_QUESTION_WITHOUT_DO_NOTHING
+            if self._remove_do_nothing
+            else OBJECT_QUESTION,
+            "objet",
+            "objet",
         )
         intent = ACTION_BY_PARTS.get((operation, object_name), "do_nothing")
         if operation == "do_nothing":

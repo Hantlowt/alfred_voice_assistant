@@ -32,6 +32,7 @@ class FakeAgent:
 def test_factorized_mode_calls_laya_twice_and_combines_answers() -> None:
     engine = object.__new__(LayaMlxIntentEngine)
     engine._mode = "factorized"
+    engine._remove_do_nothing = False
     engine._agent = FakeAgent()
 
     result = engine.predict("éteins le luminaire du salon")
@@ -43,6 +44,43 @@ def test_factorized_mode_calls_laya_twice_and_combines_answers() -> None:
         "éteins le luminaire du salon",
         "éteins le luminaire du salon",
     ]
+
+
+class ChoiceAgent:
+    def __init__(self) -> None:
+        self.question: dict | None = None
+
+    def predict(self, transcript: str, question: dict) -> dict:
+        del transcript
+        self.question = question
+        choices = tuple(question["intent"]["criteria"])
+        probabilities = dict.fromkeys(choices, 0.01)
+        probabilities["allume les lumières"] = 0.87
+        return {
+            "answers": {
+                "intent": {
+                    "choice": "allume les lumières",
+                    "probabilities": probabilities,
+                }
+            }
+        }
+
+
+def test_flat_mode_removes_do_nothing_from_the_laya_question() -> None:
+    agent = ChoiceAgent()
+    engine = object.__new__(LayaMlxIntentEngine)
+    engine._mode = "flat"
+    engine._remove_do_nothing = True
+    engine._agent = agent
+    engine._specialization = None
+    engine._embed = None
+
+    result = engine.predict("allume les lumières")
+
+    assert agent.question is not None
+    assert "do_nothing" not in agent.question["intent"]["criteria"]
+    assert "do_nothing" not in result.reports[0].probabilities
+    assert result.intent == "allume les lumières"
 
 
 def test_every_supported_object_has_on_and_off_actions() -> None:
