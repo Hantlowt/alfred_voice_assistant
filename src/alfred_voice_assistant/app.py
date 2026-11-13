@@ -15,7 +15,7 @@ from typing import Any, Callable
 import numpy as np
 
 from .home_assistant import ActionExecutor, SimulationExecutor
-from .intent import ACTION_BY_PARTS, IntentEngine
+from .intent import IntentEngine
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,32 +138,6 @@ class KyutaiTranscriber:
                     events.task_done()
 
 _SPACE_OR_PUNCTUATION = re.compile(r"[^\wÀ-ÿ]+", re.UNICODE)
-_NEGATION = re.compile(
-    r"\b(?:ne|n)\b(?:\s+\w+){0,8}\s+\b(?:pas|plus|jamais|rien)\b|"
-    r"\b(?:pas|jamais)\s+(?:de|d|la|le|les|du|des)?\s*"
-    r"(?:lumières?|halogène|salon|salle|leds?|clim(?:atisation)?)\b",
-    re.IGNORECASE,
-)
-_REPORTED_SPEECH = re.compile(
-    r"\b(?:dit|disait|demandé|demandait|ordonné|raconté)\b(?:\s+\w+){0,8}\s+\b(?:de|que|d)\b",
-    re.IGNORECASE,
-)
-_POLITE_REQUEST = re.compile(
-    r"^(?:s il (?:te|vous) plaît\s+)?(?:peux tu|pouvez vous|pourrais tu|pourriez vous|"
-    r"est ce que tu peux|est ce que vous pouvez|merci de|veuillez|je veux que tu|"
-    r"je voudrais que tu)\b",
-    re.IGNORECASE,
-)
-_DIRECT_REQUEST = re.compile(
-    r"^(?:s il (?:te|vous) plaît\s+)?(?:allum\w*|étein\w*|etein\w*|activ\w*|"
-    r"désactiv\w*|desactiv\w*|coup\w*|éclair\w*|eclair\w*)\b",
-    re.IGNORECASE,
-)
-_ACTION_TERM = re.compile(
-    r"\b(?:allum\w*|étein\w*|etein\w*|activ\w*|désactiv\w*|desactiv\w*|"
-    r"coup\w*|éclair\w*|eclair\w*)\b",
-    re.IGNORECASE,
-)
 _ALFRED = re.compile(r"\balfred\b", re.IGNORECASE)
 _HALOGENE_ASR_ALIASES = (
     re.compile(r"\bla\s+le\s+jeune\b", re.IGNORECASE),
@@ -195,20 +169,6 @@ _LEDS_ASR_ALIAS = re.compile(
     r"\b(?P<action>allum\w*|étein\w*|etein\w*)\s+les?\s+"
     r"(?:aides?|l[’']?aides?|laides?)\b",
     re.IGNORECASE,
-)
-_TURN_ON = re.compile(r"\b(?:allum\w*|activ\w*|éclair\w*|eclair\w*)\b", re.IGNORECASE)
-_TURN_OFF = re.compile(
-    r"\b(?:étein\w*|etein\w*|désactiv\w*|desactiv\w*|coup\w*)\b",
-    re.IGNORECASE,
-)
-_EXPLICIT_TARGETS = (
-    (re.compile(r"\bluminaire(?:\s+(?:du|de\s+le)\s+salon)?\b", re.IGNORECASE), "le luminaire du salon"),
-    (re.compile(r"\bsalle\s+(?:à|a)\s+manger\b", re.IGNORECASE), "la salle à manger"),
-    (re.compile(r"\bhalogène\b", re.IGNORECASE), "l'halogène"),
-    (re.compile(r"\bleds?\b", re.IGNORECASE), "les leds"),
-    (re.compile(r"\bclim(?:atisation|atiseur)?\b", re.IGNORECASE), "la clim"),
-    (re.compile(r"\bsalon\b", re.IGNORECASE), "le salon"),
-    (re.compile(r"\blumières?\b", re.IGNORECASE), "les lumières"),
 )
 
 
@@ -294,23 +254,6 @@ def transcript_for_intent(transcript: str) -> str:
     return " ".join(relevant.split()).strip(" ,;:—-")
 
 
-def deterministic_action(transcript: str) -> str | None:
-    """Résout uniquement les commandes dont opération et cible sont explicites."""
-    normalized = _SPACE_OR_PUNCTUATION.sub(" ", transcript.casefold()).strip()
-    turns_on = bool(_TURN_ON.search(normalized))
-    turns_off = bool(_TURN_OFF.search(normalized))
-    if turns_on == turns_off:
-        return None
-    object_name = next(
-        (name for pattern, name in _EXPLICIT_TARGETS if pattern.search(normalized)),
-        None,
-    )
-    if object_name is None:
-        return None
-    operation = "allumer" if turns_on else "éteindre"
-    return ACTION_BY_PARTS.get((operation, object_name))
-
-
 @dataclass(frozen=True, slots=True)
 class AlfredAuthorization:
     allowed: bool
@@ -338,24 +281,6 @@ class AlfredGate:
             authorization = AlfredAuthorization(False, "« alfred » absent")
         self._previous_had_keyword = current_had_keyword
         return authorization
-
-
-def safety_override_reason(transcript: str, intent: str = "do_nothing") -> str | None:
-    """Bloque les formes françaises dangereuses que le modèle générique confond parfois."""
-    normalized = _SPACE_OR_PUNCTUATION.sub(" ", transcript.casefold()).strip()
-    if _NEGATION.search(normalized):
-        return "négation détectée"
-    if _REPORTED_SPEECH.search(normalized):
-        return "propos rapporté détecté"
-    without_keyword = transcript_for_intent(normalized)
-    if intent != "do_nothing" and not (
-        _DIRECT_REQUEST.search(without_keyword)
-        or (_POLITE_REQUEST.search(without_keyword) and _ACTION_TERM.search(without_keyword))
-    ):
-        return "commande directe non détectée"
-    if intent != "do_nothing" and deterministic_action(transcript) is None:
-        return "équipement pris en charge non détecté clairement"
-    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -445,25 +370,12 @@ class IntentWorker:
         alfred = alfred or AlfredAuthorization(True, "mode désactivé — mot-clé non requis")
         result = self._engine.predict(transcript_for_intent(transcript))
         raw_confidence = result.confidence
-        safety_reason = safety_override_reason(transcript, result.intent)
-        explicit_action = deterministic_action(transcript)
-        if safety_reason is None and explicit_action is not None:
-            model_accepted = True
-            candidate = explicit_action
-        else:
-            model_accepted = (
-                safety_reason is None
-                and (result.intent == "do_nothing" or raw_confidence >= self._threshold)
-            )
-            candidate = result.intent if model_accepted else "do_nothing"
+        model_accepted = result.intent == "do_nothing" or raw_confidence >= self._threshold
+        candidate = result.intent if model_accepted else "do_nothing"
         blocked_by_alfred = candidate != "do_nothing" and not alfred.allowed
         final_action = "do_nothing" if blocked_by_alfred else candidate
 
         self._terminal.line(f"🧠 Action proposée par Laya : {result.intent}")
-        if explicit_action is not None and explicit_action != result.intent:
-            self._terminal.line(
-                f"🧭 Commande explicite retenue   : {explicit_action} (prioritaire sur Laya)"
-            )
         self._terminal.line(f"🔑 Contrôle Alfred           : {alfred.status}")
         for report in result.reports:
             probabilities = " · ".join(
@@ -482,9 +394,7 @@ class IntentWorker:
         self._terminal.line(f"⏱  Latence Laya totale       : {result.latency_ms:.1f} ms")
 
         reason = ""
-        if safety_reason:
-            reason = f"garde-fou : {safety_reason}"
-        elif not model_accepted:
+        if not model_accepted:
             reason = f"confiance sous le seuil de {self._threshold:.0%}"
         elif blocked_by_alfred:
             reason = "mot-clé « alfred » absent de cette phrase et de la précédente"

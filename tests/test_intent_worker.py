@@ -74,7 +74,7 @@ def test_required_alfred_allows_the_simulated_action() -> None:
     assert any("simulation uniquement" in line for line in terminal.lines)
 
 
-def test_explicit_command_overrides_an_inconsistent_laya_target() -> None:
+def test_laya_decision_is_not_overridden_by_post_processing() -> None:
     terminal = FakeTerminal()
     engine = FakeEngine()
     engine.intent = "allume la clim"
@@ -86,8 +86,8 @@ def test_explicit_command_overrides_an_inconsistent_laya_target() -> None:
     )
 
     assert engine.transcripts == ["allume le salon"]
-    assert any("Commande explicite retenue" in line for line in terminal.lines)
-    assert any("ACTION FINALE" in line and "allume le salon" in line for line in terminal.lines)
+    assert not any("Commande explicite retenue" in line for line in terminal.lines)
+    assert any("ACTION FINALE" in line and "allume la clim" in line for line in terminal.lines)
 
 
 def test_submit_normalizes_vosk_alias_before_queuing() -> None:

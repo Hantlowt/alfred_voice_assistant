@@ -10,10 +10,8 @@ from alfred_voice_assistant.app import (
     KyutaiTranscriber,
     RecentTranscripts,
     Terminal,
-    deterministic_action,
     normalize_asr_transcript,
     run_microphone,
-    safety_override_reason,
     transcript_for_intent,
 )
 from alfred_voice_assistant.home_assistant import SimulationExecutor
@@ -104,34 +102,6 @@ def test_simulate_action_never_runs_a_real_action() -> None:
     assert executor.execute("allume les leds") == "🏠 [simulation uniquement] allume les leds"
 
 
-def test_safety_override_catches_negation_and_reported_speech() -> None:
-    assert safety_override_reason("N'allume surtout pas la lumière", "allume les lumières") == (
-        "négation détectée"
-    )
-    assert safety_override_reason("Paul a dit d'allumer la lumière", "allume les lumières") == (
-        "propos rapporté détecté"
-    )
-    assert safety_override_reason("J'aime quand la clim fonctionne", "allume la clim") == (
-        "commande directe non détectée"
-    )
-    assert safety_override_reason(
-        "Alfred, allumez les lumières s'il vous plaît", "allume les lumières"
-    ) is None
-    assert safety_override_reason("Pouvez-vous éteindre la clim", "éteins la clim") is None
-    assert safety_override_reason(
-        "Alfred éteint la Lorraine", "éteins l'halogène"
-    ) == "équipement pris en charge non détecté clairement"
-
-
-def test_explicit_commands_are_resolved_without_guessing_the_target() -> None:
-    assert deterministic_action("alfred allume le salon") == "allume le salon"
-    assert deterministic_action("Alfred, éteins le luminaire") == (
-        "éteins le luminaire du salon"
-    )
-    assert deterministic_action("active les lumières du salon") == "allume le salon"
-    assert deterministic_action("éteint la Lorraine") is None
-
-
 def test_alfred_is_removed_before_laya_inference() -> None:
     assert transcript_for_intent("alfred allume le salon") == "allume le salon"
     assert transcript_for_intent("attends alfred allume les leds") == "allume les leds"
@@ -179,19 +149,6 @@ def test_known_halogen_asr_errors_are_normalized_before_intent_detection() -> No
     assert normalize_asr_transcript("c'est un très beau salon") == "c'est un très beau salon"
     assert normalize_asr_transcript("c'est un salon lumineux") == "c'est un salon lumineux"
     assert normalize_asr_transcript("allume l'halogène") == "allume l'halogène"
-
-
-def test_asr_normalization_makes_etant_a_direct_command() -> None:
-    transcript = normalize_asr_transcript("alfred étant la salle à manger")
-
-    assert safety_override_reason(transcript, "éteins la salle à manger") is None
-
-
-def test_command_after_alfred_ignores_leading_conversation() -> None:
-    transcript = normalize_asr_transcript("attends alfred allume les l'aide")
-
-    assert deterministic_action(transcript) == "allume les leds"
-    assert safety_override_reason(transcript, "allume les leds") is None
 
 
 def test_quiet_terminal_emits_nothing(capsys) -> None:

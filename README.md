@@ -232,9 +232,8 @@ mot exact `alfred` dans la phrase courante ou dans la phrase immédiatement pré
 aussi de dire ou saisir « Alfred », puis la commande dans une seconde phrase. L'autorisation ne se
 propage pas à une troisième phrase. Chaque résultat indique clairement l'état de ce contrôle.
 Par défaut, ce mode retire également `do_nothing` de l'appel Laya afin que le modèle départage les
-14 actions disponibles après détection d'Alfred. Les garde-fous déterministes restent appliqués et
-peuvent toujours ramener le résultat final à `do_nothing` en cas de négation, de cible inconnue ou
-de commande non explicite. `--no-remove-do-nothing-when-alfred` rétablit l'ancien comportement.
+14 actions disponibles après détection d'Alfred. `--no-remove-do-nothing-when-alfred` rétablit
+l'ancien ensemble de choix.
 
 Les seules actions proposées à Laya sont :
 
@@ -274,10 +273,8 @@ reste affichée, puis le terminal montre explicitement la transformation avec `N
 Cette correction s'applique aux deux modes d'intention.
 
 Après contrôle du mot-clé `alfred`, seule la partie qui le suit est envoyée à Laya : cela évite que
-la casse du prénom ou une amorce comme « attends » perturbe l'embedding. Pour une commande dont le verbe et l'un des sept objets sont
-explicites, un routeur déterministe vérifie aussi la cible. Il prime sur une proposition Laya
-incohérente (par exemple `allume le salon` classé comme clim) et bloque une cible inconnue au lieu de
-laisser le modèle deviner. Les probabilités Laya sont tout de même calculées et affichées.
+la casse du prénom ou une amorce comme « attends » perturbe l'embedding. La décision de Laya n'est
+plus remplacée ni bloquée par des expressions régulières après l'inférence.
 
 Avec `--quiet` (ou `-q`), le programme ne produit aucune sortie normale : transcriptions,
 probabilités, chargement des modèles et confirmations Home Assistant sont masqués. Une erreur fatale
@@ -285,21 +282,17 @@ reste affichée afin que le service puisse être diagnostiqué.
 
 Le seuil de confiance est désactivé par défaut : la meilleure intention proposée n'est donc pas
 rejetée en fonction de son pourcentage. `--threshold VALEUR` permet de réactiver ce filtre entre 0
-et 1 ; une intention sous ce seuil est alors remplacée par `do_nothing`. Les garde-fous
-déterministes et le contrôle Alfred restent actifs indépendamment du seuil. Les mêmes phrases
+et 1 ; une intention sous ce seuil est alors remplacée par `do_nothing`. Le contrôle Alfred reste
+actif indépendamment du seuil. Les mêmes phrases
 répétées pendant la
 fenêtre anti-doublon sont ignorées. Pour chaque phrase, le terminal distingue l'action proposée par
 Laya, les probabilités, l'état du contrôle Alfred, l'**ACTION FINALE** et si son exécution est
 autorisée. Le message suivant précise s'il s'agissait d'une simulation ou d'un appel Home Assistant.
 
-Les instructions données au modèle imposent `do_nothing` pour les conversations ordinaires, les
-propos rapportés, les négations, les phrases qui ne semblent pas adressées à l'assistant et tout cas
-ambigu. Ce garde-fou reste probabiliste : le seuil est une protection supplémentaire, pas une
-garantie de compréhension. Comme le modèle générique peut malgré tout confondre une négation avec
-l'action opposée, un filtre local conservateur force également les négations et les propos rapportés
-explicites à `do_nothing`, après l'inférence Laya. Les probabilités brutes restent affichées.
-Le même filtre exige une forme de commande directe ou de requête polie avant toute action ; une
-simple mention d'un équipement ne suffit pas.
+Lorsque `do_nothing` fait partie des choix, les instructions données au modèle le demandent pour les
+conversations ordinaires, les propos rapportés, les négations et les cas ambigus. Il n'existe plus
+de filtre regex après Laya : l'action choisie par le modèle est directement soumise au seuil puis au
+contrôle Alfred.
 
 ## Spécialisation Laya Studio
 
